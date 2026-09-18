@@ -116,6 +116,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\test-release.ps1
 
 开发测试中的 Python / Node.js 不是用户安装时的依赖。真实安装包测试需要本机已安装所审查的 Codex 版本。证据和边界见 [排查报告](docs/diagnosis-v0.3.0.md)。
 
+推送到仓库后，GitHub Actions 会在 Windows 上自动运行上表中不依赖本机安装的用例（配置回归、安装主流程、旧版长路径、启动器、无按键入口、Bootstrap、隐藏控制台、复制失败、安装位置识别和发布包解包），见 `.github/workflows/ci.yml`。`test-installer.ps1`、`test-runtime.ps1`、`test-student-matrix.ps1` 和 `test-locale-gate.py` 需要本机已安装所审查的 Codex 版本，只在本地手动运行。
+
 自动安装改进见 [v0.3.1 更新说明](RELEASE_NOTES_v0.3.1.md)。
 
 启动误报修复见 [v0.3.2 更新说明](RELEASE_NOTES_v0.3.2.md)。
