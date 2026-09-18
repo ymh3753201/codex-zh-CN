@@ -5,4 +5,4 @@ if not exist "%~dp0scripts\run-installer.bat" (
   pause
   exit /b 1
 )
-"%~dp0scripts\run-installer.bat" install "%~1"
+"%~dp0scripts\run-installer.bat" status

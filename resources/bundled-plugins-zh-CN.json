@@ -1,57 +1,240 @@
 {
-  "__marketplace__openai-bundled": {
-    "displayName": "OpenAI 内置"
-  },
-  "computer-use": {
-    "displayName": "计算机使用",
-    "shortDescription": "使用 Codex 控制 Windows 应用",
-    "longDescription": "Windows 计算机使用功能让 Codex 可使用你电脑上的应用，包括浏览器和你允许访问的文件。工作时可能会截图或读取页面内容。你始终掌控一切：可自行选择允许访问的应用，随时停止操作，并控制是否将截图用于训练。",
-    "category": "效率"
-  },
-  "sites": {
-    "displayName": "站点",
-    "shortDescription": "使用 Codex 构建和部署站点",
-    "category": "效率"
-  },
-  "spreadsheets": {
-    "displayName": "电子表格",
-    "shortDescription": "创建和编辑电子表格文件",
-    "longDescription": "在本地创建、编辑、检查、渲染、验证并导出 XLSX、CSV、TSV 电子表格，也可为 Google 表格交接生成本地 XLSX。当最终产出或目标是表格、工作簿、工作表或 CSV 时使用本插件。",
-    "category": "效率"
-  },
-  "presentations": {
-    "displayName": "演示文稿",
-    "shortDescription": "创建和编辑演示文稿",
-    "longDescription": "在本地创建、编辑、检查、渲染、验证并导出演示幻灯片，包括 PPTX 制作与 Google 幻灯片交接指引。当最终产出或目标是演示稿、幻灯片、PPT 或 Google 幻灯片时使用本插件。",
-    "category": "效率"
-  },
   "browser": {
-    "displayName": "浏览器",
-    "shortDescription": "使用 Codex 控制应用内浏览器",
-    "longDescription": "浏览器插件让 Codex 可以打开并控制应用内浏览器，主要用于本地开发页面和文件。可用于导航、检查、点击、输入，以及在 Codex 内测试页面时截图。",
-    "category": "工程",
-    "defaultPrompt": ["在 localhost 上测试我的结账流程"]
+    "source": {
+      "displayName": "Browser",
+      "shortDescription": "Control the in-app browser",
+      "longDescription": "Browser lets ChatGPT open and control the in-app browser, mainly for local development pages and files. Use it to navigate, inspect, click, type, and take screenshots while testing pages inside ChatGPT.",
+      "defaultPrompt": [
+        "Test my checkout flow on localhost"
+      ]
+    },
+    "translation": {
+      "displayName": "浏览器",
+      "shortDescription": "控制应用内浏览器",
+      "longDescription": "浏览器可让 ChatGPT 打开并控制应用内浏览器，主要用于本地开发页面和文件。在 ChatGPT 中测试页面时，可用它导航、检查、点击、输入和截图。",
+      "defaultPrompt": [
+        "在 localhost 上测试我的结账流程"
+      ]
+    }
   },
   "chrome": {
-    "displayName": "Chrome",
-    "shortDescription": "使用 Codex 控制 Chrome",
-    "longDescription": "Chrome 插件让 Codex 使用你的 Chrome 浏览器处理需要现有浏览器状态的任务，包括已打开的标签页、页面内容以及你已登录的网站。它可以在工作时导航、查看、点击、输入和截图。你始终掌控一切：Codex 在与新网站交互前会先询问，你可以随时停止操作，并可在设置中管理或移除 Chrome 访问权限。浏览器内容可能包含来自已登录网站的敏感信息。使用此插件产生的浏览器数据可能会用于训练，具体取决于你的 OpenAI 账户数据控制设置。",
-    "category": "效率",
-    "defaultPrompt": [
-      "帮我整理报销",
-      "查看我在社交媒体上的消息",
-      "在 Workday 中提交休假申请"
-    ]
+    "source": {
+      "displayName": "Chrome",
+      "shortDescription": "Control Chrome with ChatGPT",
+      "longDescription": "Chrome lets ChatGPT use your Chrome browser for tasks that need your existing browser state, including open tabs, page content, and websites you're already signed into. It can navigate, view, click, type, and take screenshots while working. You stay in control: ChatGPT asks before interacting with new sites, you can stop actions at any time, and you can manage or remove Chrome access in settings. Browser content may include sensitive information from logged-in sites. Browser data from using this plugin may be used for training, subject to your OpenAI account data controls.",
+      "defaultPrompt": [
+        "file my expenses for me",
+        "review my messages on social media",
+        "put in a PTO request in Workday"
+      ]
+    },
+    "translation": {
+      "displayName": "Chrome",
+      "shortDescription": "使用 ChatGPT 控制 Chrome",
+      "longDescription": "Chrome 可让 ChatGPT 使用你现有的浏览器状态完成任务，包括已打开的标签页、页面内容和已登录的网站。它可以在工作时导航、查看、点击、输入和截图。你始终掌控一切：ChatGPT 在与新网站交互前会先询问，你可以随时停止操作，也可以在设置中管理或移除 Chrome 访问权限。浏览器内容可能包含已登录网站中的敏感信息。使用此插件产生的浏览器数据是否可用于训练，取决于你的 OpenAI 账户数据控制设置。",
+      "defaultPrompt": [
+        "帮我整理报销",
+        "查看我在社交媒体上的消息",
+        "在 Workday 中提交休假申请"
+      ]
+    }
+  },
+  "computer-use": {
+    "source": {
+      "displayName": "Computer Use",
+      "shortDescription": "Control Windows apps",
+      "longDescription": "Windows Computer Use lets ChatGPT use any app on your computer, including your web browsers and files you allow it to access. It may take screenshots or page content while working. You stay in control: you choose which apps to allow ChatGPT to access, you can stop actions at any time, and control whether we use screenshots for training.",
+      "defaultPrompt": [
+        "Play a playlist to help me lock in",
+        "Build and run the project I already have open in Visual Studio",
+        "Open Notepad and turn these bullets into a clean draft"
+      ]
+    },
+    "translation": {
+      "displayName": "计算机使用",
+      "shortDescription": "控制 Windows 应用",
+      "longDescription": "Windows 计算机使用功能可让 ChatGPT 使用你电脑上的任何应用，包括浏览器和你允许其访问的文件。工作时可能会截取屏幕或读取页面内容。你始终掌控一切：可以选择允许 ChatGPT 访问哪些应用、随时停止操作，并控制是否允许我们将截图用于训练。",
+      "defaultPrompt": [
+        "播放一个帮助我专注的播放列表",
+        "构建并运行我已经在 Visual Studio 中打开的项目",
+        "打开记事本，把这些要点整理成一份清晰的草稿"
+      ]
+    }
+  },
+  "documents": {
+    "source": {
+      "displayName": "Documents",
+      "shortDescription": "Create and edit documents",
+      "longDescription": "Create, edit, inspect, render, verify, and export DOCX document artifacts locally. Use Documents when the durable output or target is a document, doc, docs, Word file, Google Doc, Google Docs document, memo, report, or writing artifact.",
+      "defaultPrompt": [
+        "Draft a project memo as a document",
+        "Create a document from this outline",
+        "Write a polished doc for this plan"
+      ]
+    },
+    "translation": {
+      "displayName": "文档",
+      "shortDescription": "创建和编辑文档",
+      "longDescription": "在本地创建、编辑、检查、渲染、验证和导出 DOCX 文档。当最终产出或目标是文档、Word 文件、Google 文档、备忘录、报告或写作内容时，请使用“文档”。",
+      "defaultPrompt": [
+        "起草一份项目备忘录文档",
+        "根据此大纲创建文档",
+        "为此计划编写一份精美文档"
+      ]
+    }
   },
   "latex": {
-    "displayName": "LaTeX",
-    "shortDescription": "使用 Tectonic 或 TeX Live 编译 LaTeX",
-    "longDescription": "适用于 Codex 的 LaTeX 工作流：简单项目优先使用内置 Tectonic，完整项目则回退到已检测到的 TeX Live 或 MacTeX；会验证本地 LaTeX 环境，且仅在没有可用系统安装时才可选安装 Codex 管理的完整 TeX Live 运行时。",
-    "category": "研究",
-    "defaultPrompt": [
-      "使用 latex-doctor 检查此机器是否可以编译 LaTeX。",
-      "使用 latex-compile 编译此项目的主 TeX 文件，简单项目优先尝试 Tectonic。",
-      "仅当未检测到现有 TeX Live 时，才使用 texlive-runtime-installer 安装托管的完整 TeX Live。"
-    ]
+    "source": {
+      "displayName": "LaTeX",
+      "shortDescription": "Compile LaTeX with TeX tools",
+      "longDescription": "LaTeX workflows for Codex that use bundled Tectonic first for simple projects, fall back to detected TeX Live or MacTeX for fuller projects, validate local LaTeX readiness, and optionally install a Codex-managed full TeX Live runtime only when no usable system installation is present.",
+      "defaultPrompt": [
+        "Use latex-doctor to check whether this machine can compile LaTeX.",
+        "Use latex-compile to build the main TeX file in this project, trying Tectonic first when the project is simple.",
+        "Use texlive-runtime-installer to install managed full TeX Live only if no existing TeX Live is detected."
+      ]
+    },
+    "translation": {
+      "displayName": "LaTeX",
+      "shortDescription": "使用 TeX 工具编译 LaTeX",
+      "longDescription": "适用于 Codex 的 LaTeX 工作流：简单项目优先使用内置 Tectonic，较完整的项目则回退到检测到的 TeX Live 或 MacTeX；它会验证本地 LaTeX 环境，并且仅在系统中没有可用安装时，才可选安装由 Codex 管理的完整 TeX Live 运行时。",
+      "defaultPrompt": [
+        "使用 latex-doctor 检查此计算机能否编译 LaTeX。",
+        "使用 latex-compile 构建此项目的主 TeX 文件；如果项目较简单，优先尝试 Tectonic。",
+        "仅在未检测到现有 TeX Live 时，使用 texlive-runtime-installer 安装托管的完整 TeX Live。"
+      ]
+    }
+  },
+  "pdf": {
+    "source": {
+      "displayName": "PDF",
+      "shortDescription": "Read, create, and verify PDFs",
+      "longDescription": "Read, create, inspect, render, verify, and extract content from PDF files locally. Use PDF when the durable output or target is a PDF file and visual layout fidelity matters.",
+      "defaultPrompt": [
+        "Review this PDF and verify its layout",
+        "Create a polished PDF from this content",
+        "Extract tables and text from this PDF"
+      ]
+    },
+    "translation": {
+      "displayName": "PDF",
+      "shortDescription": "读取、创建和验证 PDF",
+      "longDescription": "在本地读取、创建、检查、渲染、验证 PDF 文件并提取其中的内容。当最终产出或目标是 PDF 文件，并且需要保证视觉版式准确时，请使用“PDF”。",
+      "defaultPrompt": [
+        "审阅此 PDF 并验证其版式",
+        "根据这些内容创建一份精美的 PDF",
+        "从此 PDF 中提取表格和文本"
+      ]
+    }
+  },
+  "presentations": {
+    "source": {
+      "displayName": "Presentations",
+      "shortDescription": "Create and edit presentations",
+      "longDescription": "Create, edit, inspect, render, verify, and export presentation slide decks locally, including PPTX authoring and native Google Slides handoff guidance. Use Presentations when the durable output or target is a deck, slidedeck, presentation deck, slide deck, slides, PowerPoint, Google Slides, presentation, speaker notes, or visual deck repair.",
+      "defaultPrompt": [
+        "Create a slide deck about the solar system",
+        "Research this company's latest earnings and create a slide deck on the company's financial performance",
+        "Create a visually stunning slide deck about the latest AI trends"
+      ]
+    },
+    "translation": {
+      "displayName": "演示文稿",
+      "shortDescription": "创建和编辑演示文稿",
+      "longDescription": "在本地创建、编辑、检查、渲染、验证和导出演示幻灯片，包括 PPTX 制作和原生 Google 幻灯片交接指导。当最终产出或目标是幻灯片、PowerPoint、Google 幻灯片、演示文稿、演讲者备注或修复视觉版式时，请使用“演示文稿”。",
+      "defaultPrompt": [
+        "创建一份关于太阳系的幻灯片",
+        "研究这家公司最新的财报，并制作一份介绍其财务表现的幻灯片",
+        "制作一份视觉效果出色的幻灯片，介绍最新的 AI 趋势"
+      ]
+    }
+  },
+  "sites": {
+    "source": {
+      "displayName": "Sites",
+      "shortDescription": "Build and deploy websites",
+      "longDescription": "Build, save, deploy, and inspect websites such as landing pages, portfolios, dashboards, portals, trackers, hubs, games, and internal tools with Sites. Use of Sites is subject to the ChatGPT Sites Terms (https://openai.com/policies/chatgpt-sites-terms/), and you are responsible for your website content.",
+      "defaultPrompt": [
+        "Build a new-hire portal for my company",
+        "Create a daily sudoku game with a leaderboard",
+        "Build a dashboard to track customer support trends"
+      ]
+    },
+    "translation": {
+      "displayName": "站点",
+      "shortDescription": "构建和部署网站",
+      "longDescription": "使用“站点”构建、保存、部署和检查网站，例如落地页、作品集、仪表盘、门户、跟踪器、信息中心、游戏和内部工具。使用“站点”须遵守 ChatGPT Sites 条款（https://openai.com/policies/chatgpt-sites-terms/），你需要对自己的网站内容负责。",
+      "defaultPrompt": [
+        "为我的公司构建一个新员工门户",
+        "创建一个带排行榜的每日数独游戏",
+        "构建一个跟踪客户支持趋势的仪表盘"
+      ]
+    }
+  },
+  "spreadsheets": {
+    "source": {
+      "displayName": "Spreadsheets",
+      "shortDescription": "Create and edit spreadsheets",
+      "longDescription": "Create, edit, inspect, render, verify, and export XLSX, CSV, and TSV spreadsheets locally, including local XLSX authoring for native Google Sheets handoff. Use Spreadsheets when the durable output or target is a spreadsheet, workbook, sheet, Google Sheet, or CSV file. Use Excel Live Control for working on a spreadsheet open in Microsoft Excel app, through the ChatGPT add-in.",
+      "defaultPrompt": [
+        "Create a spreadsheet to analyze this company's financials",
+        "Create a corporate expense report template for my company",
+        "Take this bank statement CSV and create a full spreadsheet to analyze my transactions"
+      ]
+    },
+    "translation": {
+      "displayName": "电子表格",
+      "shortDescription": "创建和编辑电子表格",
+      "longDescription": "在本地创建、编辑、检查、渲染、验证和导出 XLSX、CSV 与 TSV 电子表格，包括制作可原生交接给 Google 表格的本地 XLSX 文件。当最终产出或目标是电子表格、工作簿、工作表、Google 表格或 CSV 文件时，请使用“电子表格”。如果要通过 ChatGPT 加载项处理 Microsoft Excel 应用中已打开的工作簿，请使用 Excel 实时控制。",
+      "defaultPrompt": [
+        "创建一个电子表格来分析这家公司的财务状况",
+        "为我的公司创建一份企业费用报表模板",
+        "根据这份银行对账单 CSV 创建一个完整的电子表格来分析我的交易"
+      ]
+    }
+  },
+  "template-creator": {
+    "source": {
+      "displayName": "Template Creator",
+      "shortDescription": "Create or update reusable templates from reference content",
+      "longDescription": "Use Template Creator to create reusable templates from documents, spreadsheets, presentations, Google Docs, Slides, and Sheets links, ImageGen or Product Design images, emails, Slack messages, and Site projects. Template Creator preserves the structure, voice, layout, and style of your reference so you can quickly create new versions whenever you need them.",
+      "defaultPrompt": [
+        "Create a reusable template from a document, presentation, spreadsheet, Google Workspace link, or Site project",
+        "Turn this ImageGen or Product Design image into a reusable template",
+        "Save this email or Slack message as a reusable text template"
+      ]
+    },
+    "translation": {
+      "displayName": "模板创建器",
+      "shortDescription": "根据参考内容创建或更新可重复使用的模板",
+      "longDescription": "使用“模板创建器”，可根据文档、电子表格、演示文稿、Google 文档/幻灯片/表格链接、ImageGen 或产品设计图片、电子邮件、Slack 消息及站点项目创建可重复使用的模板。模板创建器会保留参考内容的结构、语气、版式和风格，方便你在需要时快速创建新版本。",
+      "defaultPrompt": [
+        "根据文档、演示文稿、电子表格、Google Workspace 链接或站点项目创建可重复使用的模板",
+        "将这张 ImageGen 或产品设计图片转换为可重复使用的模板",
+        "将这封电子邮件或 Slack 消息保存为可重复使用的文本模板"
+      ]
+    }
+  },
+  "visualize": {
+    "source": {
+      "displayName": "Visualize",
+      "shortDescription": "Create interactive visuals",
+      "longDescription": "Create interactive charts, maps, diagrams, simulations, 3D models, data explorers, and UI previews directly in your conversation. Filter data, select details, compare scenarios, and adjust inputs to see how the result changes.",
+      "defaultPrompt": [
+        "Turn this dataset into an interactive explorer with filters and selectable details",
+        "Show how a spinning gyroscope works in an adjustable 3D simulation",
+        "Visualize this database schema as an interactive relationship graph"
+      ]
+    },
+    "translation": {
+      "displayName": "可视化",
+      "shortDescription": "创建交互式视觉内容",
+      "longDescription": "直接在对话中创建交互式图表、地图、示意图、模拟、3D 模型、数据浏览器和界面预览。你可以筛选数据、选择详细信息、比较不同情景并调整输入，以查看结果如何变化。",
+      "defaultPrompt": [
+        "将此数据集转换为一个可筛选并可选择详细信息的交互式浏览器",
+        "通过可调节的 3D 模拟展示旋转陀螺仪的工作原理",
+        "将此数据库架构可视化为交互式关系图"
+      ]
+    }
   }
 }

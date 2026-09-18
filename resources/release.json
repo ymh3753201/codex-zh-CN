@@ -1,8 +1,20 @@
 {
   "repo": "xqnode/codex-zh-CN",
-  "release": "0.1.2",
+  "release": "0.3.4",
+  "strategy": "locale-compatible-copy",
+  "testedCodexVersion": "26.911.7940.0",
   "supportedCodexVersions": [
-    "26.519.81530",
-    "26.601.2237.0"
-  ]
+    "26.908.9136.0",
+    "26.911.7940.0"
+  ],
+  "officialLocaleAudit": {
+    "nativeMenuKeys": 196,
+    "webviewKeys": 17041,
+    "knownOfficialMissingKeys": 1
+  },
+  "testedAppVersion": "26.911.61220",
+  "validation": {
+    "windows11": "26.911.7940.0 real renderer gate and integrity checks, isolated compatible-copy runtime and repeated-launch smoke passed; not full visual acceptance",
+    "windows10": "User confirmed v0.3.0 localization works; v0.3.3 legacy long-path workflow tested under Windows PowerShell 5.1 with process-local legacy .NET switches; onsite confirmation pending"
+  }
 }
