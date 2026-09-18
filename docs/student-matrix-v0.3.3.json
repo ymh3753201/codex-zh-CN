@@ -1,0 +1,120 @@
+{
+    "startedAt":  "2026-09-16T23:08:09.8618274+08:00",
+    "toolVersion":  "0.3.3",
+    "archiveSha256":  "28A8F68F8BC0638B869AD2ECCECAC11921B635D98A92678B567CA4266469B2DA",
+    "powershellVersion":  "5.1.26100.9444",
+    "windowsVersion":  "10.0.26100.0",
+    "scope":  "Real packaged installer and Robocopy; synthetic app resources; simulated profile directory names and process-local .NET path modes. Not separate Windows accounts or Windows 10 hardware.",
+    "cases":  [
+                  {
+                      "passed":  true,
+                      "profile":  "asus",
+                      "pathHandling":  "Modern",
+                      "oldTraversalPassed":  true,
+                      "oldTraversalError":  "",
+                      "dependencyPathLength":  389,
+                      "exitCode":  0
+                  },
+                  {
+                      "passed":  true,
+                      "profile":  "asus",
+                      "pathHandling":  "Legacy",
+                      "oldTraversalPassed":  false,
+                      "oldTraversalError":  "The specified path, file name, or both are too long. The fully qualified file name must be less than 260 characters, and the directory name must be less than 248 characters.",
+                      "dependencyPathLength":  389,
+                      "exitCode":  0
+                  },
+                  {
+                      "passed":  true,
+                      "profile":  "asus",
+                      "pathHandling":  "ModernBlocked",
+                      "oldTraversalPassed":  false,
+                      "oldTraversalError":  "The specified path, file name, or both are too long. The fully qualified file name must be less than 260 characters, and the directory name must be less than 248 characters.",
+                      "dependencyPathLength":  389,
+                      "exitCode":  0
+                  },
+                  {
+                      "passed":  true,
+                      "profile":  "asus",
+                      "pathHandling":  "LegacyUnblocked",
+                      "oldTraversalPassed":  false,
+                      "oldTraversalError":  "The specified path, file name, or both are too long. The fully qualified file name must be less than 260 characters, and the directory name must be less than 248 characters.",
+                      "dependencyPathLength":  389,
+                      "exitCode":  0
+                  },
+                  {
+                      "passed":  true,
+                      "profile":  "Administrator",
+                      "pathHandling":  "Modern",
+                      "oldTraversalPassed":  true,
+                      "oldTraversalError":  "",
+                      "dependencyPathLength":  398,
+                      "exitCode":  0
+                  },
+                  {
+                      "passed":  true,
+                      "profile":  "Administrator",
+                      "pathHandling":  "Legacy",
+                      "oldTraversalPassed":  false,
+                      "oldTraversalError":  "The specified path, file name, or both are too long. The fully qualified file name must be less than 260 characters, and the directory name must be less than 248 characters.",
+                      "dependencyPathLength":  398,
+                      "exitCode":  0
+                  },
+                  {
+                      "passed":  true,
+                      "profile":  "Administrator",
+                      "pathHandling":  "ModernBlocked",
+                      "oldTraversalPassed":  false,
+                      "oldTraversalError":  "The specified path, file name, or both are too long. The fully qualified file name must be less than 260 characters, and the directory name must be less than 248 characters.",
+                      "dependencyPathLength":  398,
+                      "exitCode":  0
+                  },
+                  {
+                      "passed":  true,
+                      "profile":  "Administrator",
+                      "pathHandling":  "LegacyUnblocked",
+                      "oldTraversalPassed":  false,
+                      "oldTraversalError":  "The specified path, file name, or both are too long. The fully qualified file name must be less than 260 characters, and the directory name must be less than 248 characters.",
+                      "dependencyPathLength":  398,
+                      "exitCode":  0
+                  },
+                  {
+                      "passed":  true,
+                      "profile":  "学生 A[01]",
+                      "pathHandling":  "Modern",
+                      "oldTraversalPassed":  true,
+                      "oldTraversalError":  "",
+                      "dependencyPathLength":  393,
+                      "exitCode":  0
+                  },
+                  {
+                      "passed":  true,
+                      "profile":  "学生 A[01]",
+                      "pathHandling":  "Legacy",
+                      "oldTraversalPassed":  false,
+                      "oldTraversalError":  "The specified path, file name, or both are too long. The fully qualified file name must be less than 260 characters, and the directory name must be less than 248 characters.",
+                      "dependencyPathLength":  393,
+                      "exitCode":  0
+                  },
+                  {
+                      "passed":  true,
+                      "profile":  "学生 A[01]",
+                      "pathHandling":  "ModernBlocked",
+                      "oldTraversalPassed":  false,
+                      "oldTraversalError":  "The specified path, file name, or both are too long. The fully qualified file name must be less than 260 characters, and the directory name must be less than 248 characters.",
+                      "dependencyPathLength":  393,
+                      "exitCode":  0
+                  },
+                  {
+                      "passed":  true,
+                      "profile":  "学生 A[01]",
+                      "pathHandling":  "LegacyUnblocked",
+                      "oldTraversalPassed":  false,
+                      "oldTraversalError":  "The specified path, file name, or both are too long. The fully qualified file name must be less than 260 characters, and the directory name must be less than 248 characters.",
+                      "dependencyPathLength":  393,
+                      "exitCode":  0
+                  }
+              ],
+    "passed":  true,
+    "finishedAt":  "2026-09-16T23:09:01.5740281+08:00"
+}
