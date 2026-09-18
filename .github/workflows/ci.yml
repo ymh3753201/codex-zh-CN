@@ -20,6 +20,8 @@ jobs:
     timeout-minutes: 45
     env:
       PYTHONIOENCODING: utf-8
+    # 用例内部会调用子进程，结束时 LASTEXITCODE 可能残留非零值；
+    # 每个步骤在用例正常返回后重置为 0，用例抛出的错误仍会让步骤失败。
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -27,61 +29,61 @@ jobs:
       - name: 显示运行环境
         shell: powershell
         run: |
-          $global:LASTEXITCODE = 0
           Write-Host "Windows PowerShell: $($PSVersionTable.PSVersion)"
           Write-Host "系统版本: $([Environment]::OSVersion.VersionString)"
           Write-Host "系统 ANSI 代码页: $((Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Nls\CodePage').ACP)"
           # GitHub 托管的 Windows 运行器是英文系统（ANSI 代码页 1252）。
           # WScript.Shell 在该代码页下无法创建中文名快捷方式，因此依赖
           # 中文快捷方式的用例留到本地中文 Windows 上运行。
+          $global:LASTEXITCODE = 0
 
       - name: 打包发布包
         shell: powershell
         run: |
-          $global:LASTEXITCODE = 0
           .\scripts\package-release.ps1
+          $global:LASTEXITCODE = 0
 
       - name: 配置、备份与进程隔离回归
         shell: powershell
         run: |
-          $global:LASTEXITCODE = 0
           .\tests\test-regressions.ps1
+          $global:LASTEXITCODE = 0
 
       - name: 启动器复用与失败传播
         shell: powershell
         run: |
-          $global:LASTEXITCODE = 0
           .\tests\test-launcher.ps1
+          $global:LASTEXITCODE = 0
 
       - name: 无按键安装入口
         shell: powershell
         run: |
-          $global:LASTEXITCODE = 0
           .\tests\test-unattended.ps1
+          $global:LASTEXITCODE = 0
 
       - name: 入口脚本与错误日志
         shell: powershell
         run: |
-          $global:LASTEXITCODE = 0
           .\tests\test-bootstrap.ps1 -HeadlessRunner
+          $global:LASTEXITCODE = 0
 
       - name: 隐藏控制台模式
         shell: powershell
         run: |
-          $global:LASTEXITCODE = 0
           .\tests\test-console-mode.ps1
+          $global:LASTEXITCODE = 0
 
       - name: 复制失败与完整性校验
         shell: powershell
         run: |
-          $global:LASTEXITCODE = 0
           .\tests\test-copy-failures.ps1
+          $global:LASTEXITCODE = 0
 
       - name: 自定义安装位置识别
         shell: powershell
         run: |
-          $global:LASTEXITCODE = 0
           .\tests\test-discovery.ps1
+          $global:LASTEXITCODE = 0
 
       - name: 失败时上传诊断文件
         if: failure()
