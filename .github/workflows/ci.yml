@@ -63,7 +63,7 @@ jobs:
         shell: powershell
         run: |
           $global:LASTEXITCODE = 0
-          .\tests\test-bootstrap.ps1
+          .\tests\test-bootstrap.ps1 -HeadlessRunner
 
       - name: 隐藏控制台模式
         shell: powershell

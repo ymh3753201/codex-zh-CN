@@ -1,5 +1,7 @@
 #Requires -Version 5.1
-param([string]$PackageRoot = '')
+# -HeadlessRunner：无控制台的运行器（例如 GitHub Actions 托管运行器）上 cmd 的 pause 会立即返回，
+# 交互等待本身只能在本机带控制台的 Windows 上验证。
+param([string]$PackageRoot = '', [switch]$HeadlessRunner)
 $ErrorActionPreference = 'Stop'
 if (-not $PackageRoot) { $PackageRoot = Split-Path -Parent $PSScriptRoot }
 $root = Join-Path ([IO.Path]::GetTempPath()) ('codex-zh-bootstrap-' + [guid]::NewGuid().ToString('N'))
@@ -44,17 +46,27 @@ try {
     $info.RedirectStandardInput = $true
     $process = [Diagnostics.Process]::Start($info)
     $output = $process.StandardOutput.ReadToEndAsync(); $errorOutput = $process.StandardError.ReadToEndAsync()
-    if ($process.WaitForExit(8000)) {
-        $earlyOut = $output.Result
-        $earlyErr = $errorOutput.Result
-        throw ("Failed BAT must not silently close (exit=$($process.ExitCode), entry=$($info.EnvironmentVariables['CODEX_TEST_ENTRY'])); " +
-            "stdout=<<$earlyOut>>; stderr=<<$earlyErr>>")
+    $exitedEarly = $process.WaitForExit(8000)
+    if ($HeadlessRunner) {
+        Assert ($output.Result.Contains('Installation did not complete')) 'Failed BAT must reach the failure notice printed just before the pause prompt'
+        try { $process.StandardInput.WriteLine(' ') } catch {}
+        try { $process.StandardInput.Close() } catch {}
+        if (-not $process.WaitForExit(10000)) { throw 'Failed BAT did not exit after acknowledgment' }
+        Assert ($process.ExitCode -ne 0 -and $output.Result.Contains('[FAILED]')) 'BAT must preserve failure'
+        Write-Host "[PASS] failed BAT preserves the failure notice and error exit code (interactive key wait is only checked on a console, exitEarly=$exitedEarly)"
+    } else {
+        if ($exitedEarly) {
+            $earlyOut = $output.Result
+            $earlyErr = $errorOutput.Result
+            throw ("Failed BAT must not silently close (exit=$($process.ExitCode), entry=$($info.EnvironmentVariables['CODEX_TEST_ENTRY'])); " +
+                "stdout=<<$earlyOut>>; stderr=<<$earlyErr>>")
+        }
+        $process.StandardInput.WriteLine(' ')
+        $process.StandardInput.Close()
+        Assert ($process.WaitForExit(10000)) 'Failed BAT did not exit after acknowledgment'
+        Assert ($process.ExitCode -ne 0 -and $output.Result.Contains('[FAILED]')) 'BAT must preserve failure'
+        Write-Host '[PASS] failed BAT keeps error window until acknowledgment'
     }
-    $process.StandardInput.WriteLine(' ')
-    $process.StandardInput.Close()
-    Assert ($process.WaitForExit(10000)) 'Failed BAT did not exit after acknowledgment'
-    Assert ($process.ExitCode -ne 0 -and $output.Result.Contains('[FAILED]')) 'BAT must preserve failure'
-    Write-Host '[PASS] failed BAT keeps error window until acknowledgment'
 } finally {
     if ($process) { if (-not $process.HasExited) { $process.Kill(); $process.WaitForExit() }; $process.Dispose() }
     $resolved = [IO.Path]::GetFullPath($root)
