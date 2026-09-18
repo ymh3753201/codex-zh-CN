@@ -116,6 +116,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\test-release.ps1
 
 开发测试中的 Python / Node.js 不是用户安装时的依赖。真实安装包测试需要本机已安装所审查的 Codex 版本。证据和边界见 [排查报告](docs/diagnosis-v0.3.0.md)。
 
+推送到仓库后，GitHub Actions 会自动运行与中文快捷方式无关的用例：配置回归、启动器、无按键入口、Bootstrap、隐藏控制台、复制失败、安装位置识别和发布包打包，见 `.github/workflows/ci.yml`。
+
+其余用例只在本地手动运行：`test-installer.ps1`、`test-runtime.ps1`、`test-student-matrix.ps1` 和 `test-locale-gate.py` 需要本机已安装所审查的 Codex 版本；`test-workflow.ps1` 和 `test-release.ps1` 需要中文代码页的 Windows——GitHub 托管的英文 Windows 运行器使用 ANSI 代码页 1252，WScript.Shell 在该代码页下无法创建中文名快捷方式。
+
 自动安装改进见 [v0.3.1 更新说明](RELEASE_NOTES_v0.3.1.md)。
 
 启动误报修复见 [v0.3.2 更新说明](RELEASE_NOTES_v0.3.2.md)。
