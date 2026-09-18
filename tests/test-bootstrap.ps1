@@ -44,7 +44,12 @@ try {
     $info.RedirectStandardInput = $true
     $process = [Diagnostics.Process]::Start($info)
     $output = $process.StandardOutput.ReadToEndAsync(); $errorOutput = $process.StandardError.ReadToEndAsync()
-    Assert (-not $process.WaitForExit(8000)) 'Failed BAT must not silently close'
+    if ($process.WaitForExit(8000)) {
+        $earlyOut = $output.Result
+        $earlyErr = $errorOutput.Result
+        throw ("Failed BAT must not silently close (exit=$($process.ExitCode), entry=$($info.EnvironmentVariables['CODEX_TEST_ENTRY'])); " +
+            "stdout=<<$earlyOut>>; stderr=<<$earlyErr>>")
+    }
     $process.StandardInput.WriteLine(' ')
     $process.StandardInput.Close()
     Assert ($process.WaitForExit(10000)) 'Failed BAT did not exit after acknowledgment'
