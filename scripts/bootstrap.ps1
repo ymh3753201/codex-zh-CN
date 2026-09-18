@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 [CmdletBinding()]
 param(
     [ValidateSet('install', 'status', 'uninstall', 'repair-launcher')]
@@ -30,13 +30,22 @@ try {
             throw "Missing package file: $relative. Extract the complete ZIP into a new folder and try again."
         }
     }
-    $hostPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+$hostCandidates = @(
+    (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'),
+    (Join-Path $env:SystemRoot 'Sysnative\WindowsPowerShell\v1.0\powershell.exe')
+)
+$hostPath = $hostCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
+if (-not $hostPath) {
+    $command = Get-Command powershell.exe -ErrorAction SilentlyContinue
+    if ($command) { $hostPath = $command.Source }
+}
+if (-not $hostPath) { throw 'Windows PowerShell 5.1 未找到。请确认系统未精简掉 Windows PowerShell。' }
     $arguments = @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot 'install_windows.ps1'), '-Action', $Action, '-NoPause')
     if ($CodexPath) { $arguments += @('-CodexPath', $CodexPath) }
     # A separate process also captures parser/bootstrap errors and exit statements.
     $ErrorActionPreference = 'Continue'
     & $hostPath @arguments 2>&1 | ForEach-Object { Write-Host "$_" }
-    $exitCode = $LASTEXITCODE
+    $exitCode = if ($null -eq $LASTEXITCODE) { 0 } else { [int]$LASTEXITCODE }
     $ErrorActionPreference = 'Stop'
     if ($exitCode -ne 0) { throw "Installer failed (exit code $exitCode). See the error above and the startup log." }
     if ($AutoClose -and -not $NoPause -and $Action -in @('install', 'repair-launcher')) { Start-Sleep -Seconds 8 }

@@ -4,6 +4,8 @@ Set shell = CreateObject("WScript.Shell")
 Set fs = CreateObject("Scripting.FileSystemObject")
 root = fs.GetParentFolderName(WScript.ScriptFullName)
 host = shell.ExpandEnvironmentStrings("%SystemRoot%") & "\System32\WindowsPowerShell\v1.0\powershell.exe"
+If Not fs.FileExists(host) Then host = shell.ExpandEnvironmentStrings("%SystemRoot%") & "\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
+If Not fs.FileExists(host) Then host = "powershell.exe"
 command = Chr(34) & host & Chr(34) & " -NoProfile -ExecutionPolicy Bypass -File " & Chr(34) & root & "\scripts\bootstrap.ps1" & Chr(34) & " -AutoClose"
 On Error Resume Next
 result = shell.Run(command, 1, True)

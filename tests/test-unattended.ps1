@@ -42,7 +42,7 @@ exit 0
             throw "Entry still waits for a key after installer returned: $name"
         }
         if ($process.ExitCode -ne 0 -or -not $output.Result.Contains('INSTALLER_RETURNED')) {
-            throw "Entry failed: $name : $($errors.Result)"
+            throw "Entry failed: $name : stdout=<$($output.Result)> stderr=<$($errors.Result)>"
         }
         $process.Dispose(); $process = $null
     }
