@@ -31,6 +31,30 @@ jobs:
           Write-Host "Windows PowerShell: $($PSVersionTable.PSVersion)"
           Write-Host "系统版本: $([Environment]::OSVersion.VersionString)"
 
+      - name: 快捷方式环境诊断
+        shell: powershell
+        run: |
+          $global:LASTEXITCODE = 0
+          Write-Host "OutputEncoding=$([Console]::OutputEncoding.WebName) InputEncoding=$([Console]::InputEncoding.WebName)"
+          Write-Host "ACP=$((Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Nls\CodePage' -ErrorAction SilentlyContinue).ACP)"
+          $name = 'Codex 中文版.lnk'
+          Write-Host ("非 ASCII 文件名码点: " + (($name.ToCharArray() | ForEach-Object { [int]$_ }) -join ','))
+          $probe = Join-Path $env:TEMP 'lnk-probe'
+          New-Item -ItemType Directory -Path $probe -Force | Out-Null
+          $shell = New-Object -ComObject WScript.Shell
+          foreach ($candidate in @('plain-probe.lnk', $name)) {
+            $path = Join-Path $probe $candidate
+            $link = $shell.CreateShortcut($path)
+            $link.TargetPath = Join-Path $env:SystemRoot 'System32\notepad.exe'
+            try {
+              $link.Save()
+              Write-Host "[OK] $candidate 创建成功，存在=$([IO.File]::Exists($path))"
+            } catch {
+              Write-Host "[FAIL] $candidate -> $($_.Exception.Message)"
+            }
+          }
+          Write-Host "临时目录: $probe"
+
       - name: 打包发布包
         shell: powershell
         run: |
