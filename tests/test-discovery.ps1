@@ -17,6 +17,17 @@ try {
     function Get-CimInstance { @([pscustomobject]@{ SessionId=$sid; ExecutablePath=(Join-Path $app 'Codex.exe'); Name='Codex.exe'; CommandLine='Codex.exe' }) }
     $found = Get-CodexInfo
     Assert ($found.Found -and $found.AppDirectory -eq $app) 'Discover running custom installation'
+    # A failed pre-v0.3 install may leave a running copy in zh-cn-patched.
+    # It must never become the source of a new installation.
+    $legacy = Join-Path (Join-Path $root 'data') 'zh-cn-patched'
+    [void][IO.Directory]::CreateDirectory((Join-Path $legacy 'resources'))
+    [IO.File]::WriteAllText((Join-Path $legacy 'resources\app.asar'), 'legacy fixture')
+    [IO.File]::WriteAllText((Join-Path $legacy 'Codex.exe'), 'legacy fixture')
+    function Get-CimInstance { @(
+        [pscustomobject]@{ SessionId=$sid; ExecutablePath=(Join-Path $legacy 'Codex.exe'); Name='Codex.exe'; CommandLine='Codex.exe' },
+        [pscustomobject]@{ SessionId=$sid; ExecutablePath=(Join-Path $app 'Codex.exe'); Name='Codex.exe'; CommandLine='Codex.exe' }
+    ) }
+    Assert ((Get-CodexInfo).AppDirectory -eq $app) 'Ignore legacy zh-cn-patched copy during discovery'
     $CodexPath = Join-Path $app 'Codex.exe'
     Assert ((Get-CodexInfo).AppDirectory -eq $app) 'Explicit executable must resolve to app folder'
     $CodexPath = $root

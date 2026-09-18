@@ -8,6 +8,23 @@ function Test-PathWithin([string]$Path, [string]$Root) {
         $fullPath.StartsWith($rootPath + '\', [StringComparison]::OrdinalIgnoreCase)
 }
 
+function Get-LegacyCompatibilityRoots {
+    # v0.1/v0.2 used this writable copy outside the current zh-cn-tool state
+    # directory. Keep it out of discovery so a failed old install cannot be
+    # selected as the source for a new installation.
+    return @(
+        (Join-Path $CodexHome 'zh-cn-patched'),
+        (Join-Path $CodexHome 'zh-cn-patched\app')
+    )
+}
+
+function Test-IsLegacyCompatibilityPath([string]$Path) {
+    foreach ($root in (Get-LegacyCompatibilityRoots)) {
+        if (Test-PathWithin $Path $root) { return $true }
+    }
+    return $false
+}
+
 function Get-TomlStructuralLines([string[]]$Lines) {
     # Preserve line indexes while masking multiline string contents. A heading
     # inside instructions must never be mistaken for the real [desktop] table.
@@ -49,9 +66,17 @@ function Get-TomlStructuralLines([string[]]$Lines) {
 function Get-ActiveCompatibilityCopy {
     $recordPath = Join-Path $toolStateRoot 'active-copy.json'
     if (-not (Test-Path -LiteralPath $recordPath)) { return $null }
-    $record = Get-Content -LiteralPath $recordPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    if (-not (Test-PathWithin $record.AppDirectory (Join-Path $toolStateRoot 'copies')) -or
-        -not (Test-PathWithin $record.Executable $record.AppDirectory)) { throw '中文副本记录路径异常' }
+    try {
+        $record = Get-Content -LiteralPath $recordPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if (-not (Test-PathWithin $record.AppDirectory (Join-Path $toolStateRoot 'copies')) -or
+            -not (Test-PathWithin $record.Executable $record.AppDirectory)) { throw '路径不在受保护的副本目录中' }
+    } catch {
+        # Old releases could leave a truncated or incompatible record after a
+        # failed copy. Ignore it for a fresh install; Publish-Compatibility-
+        # Launcher will atomically replace it after the new copy is verified.
+        Write-WarnLine "发现旧版或损坏的中文副本记录，安装时将重新创建：$recordPath"
+        return $null
+    }
     if (-not (Test-Path -LiteralPath $record.Executable)) { return $null }
     return $record
 }

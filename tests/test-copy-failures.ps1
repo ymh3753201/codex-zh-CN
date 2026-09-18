@@ -19,6 +19,13 @@ try {
     function Set-LocaleCompatibility { return 1 }
     $source=[pscustomobject]@{AppDirectory=$app;Version='fixture'}
     $original=(Get-FileHash -LiteralPath $asar).Hash
+    # A previous release can leave a truncated active record after a crash.
+    # A new verified copy must recover instead of stopping at the stale JSON.
+    [void][IO.Directory]::CreateDirectory($toolStateRoot)
+    [IO.File]::WriteAllText((Join-Path $toolStateRoot 'active-copy.json'), '{"truncated":')
+    $recovered = New-CompatibilityCopy $source
+    Assert ($null -ne $recovered -and (Test-Path -LiteralPath $recovered.Executable)) 'Corrupt old active record must be recoverable'
+    Remove-Item -LiteralPath (Join-Path $toolStateRoot 'active-copy.json') -Force
     $active=New-CompatibilityCopy $source
     $active.ToolVersion='previous-version-fixture'
     Write-TextFile (Join-Path $toolStateRoot 'active-copy.json') ($active | ConvertTo-Json)

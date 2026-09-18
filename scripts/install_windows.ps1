@@ -266,7 +266,8 @@ function Get-CodexInfo {
             Where-Object {
                 $_.SessionId -eq $sessionId -and $_.ExecutablePath -and
                 $_.Name -match '^(?i:ChatGPT|Codex)\.exe$' -and
-                $_.CommandLine -notmatch '(?:^|\s)--type(?:=|\s)'
+                $_.CommandLine -notmatch '(?:^|\s)--type(?:=|\s)' -and
+                -not (Test-IsLegacyCompatibilityPath $_.ExecutablePath)
             } |
             ForEach-Object { Split-Path -Parent $_.ExecutablePath } |
             Sort-Object -Unique)
