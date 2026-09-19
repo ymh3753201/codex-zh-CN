@@ -175,18 +175,15 @@ function Get-OfficialZhResourceStatus([string]$AppDirectory) {
         $headerText = [System.Text.Encoding]::UTF8.GetString($pickle, 8, $stringSize)
         $result.AsarReadable = $true
         $header = $headerText | ConvertFrom-Json
-        $nativeEntry = $header.files.PSObject.Properties['native-menu-locales'].Value.files.PSObject.Properties['zh-CN.json']
-        $result.NativeMenuZhCn = [bool]($nativeEntry -and $nativeEntry.Value.size -gt 0)
-        $webEntries = @($header.files.webview.files.assets.files.PSObject.Properties | Where-Object { $_.Name -match '^zh-CN-[^/]+\.js$' -and $_.Value.size -gt 0 })
+        $entries = @(Get-AsarFileEntries $header)
+        $nativeEntries = @($entries | Where-Object { $_.Path -match '(?i)^native-menu-locales/zh-CN\.json$' -and $_.Entry.size -gt 0 })
+        $result.NativeMenuZhCn = $nativeEntries.Count -gt 0
+        $webEntries = @($entries | Where-Object { $_.Path -match '(?i)^webview/assets/zh-CN[^/]*\.js$' -and $_.Entry.size -gt 0 })
         $result.WebviewZhCn = $webEntries.Count -gt 0
-        $vite = $header.files.PSObject.Properties['.vite'].Value
-        $build = $vite.files.PSObject.Properties['build'].Value
-        $mainProperty = $build.files.PSObject.Properties |
-            Where-Object { $_.Name -match '^main-[^/]+\.js$' } |
-            Select-Object -First 1
-        if ($mainProperty) {
-            $mainSize = [long]$mainProperty.Value.size
-            $mainOffset = [long]$mainProperty.Value.offset
+        $mainEntry = $entries | Where-Object { $_.Path -match '(?i)(?:^|/)(?:main|main-)[^/]*\.js$' } | Select-Object -First 1
+        if ($mainEntry) {
+            $mainSize = [long]$mainEntry.Entry.size
+            $mainOffset = [long]$mainEntry.Entry.offset
             if ($mainSize -gt 0 -and $mainSize -le 67108864) {
                 [void]$stream.Seek((8L + [long]$headerSize + $mainOffset), [System.IO.SeekOrigin]::Begin)
                 $mainBytes = New-Object byte[] $mainSize

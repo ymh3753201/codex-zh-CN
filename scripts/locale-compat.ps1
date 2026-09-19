@@ -25,6 +25,17 @@ function Test-IsLegacyCompatibilityPath([string]$Path) {
     return $false
 }
 
+function Get-AsarFileEntries($Node, [string]$Prefix = '') {
+    foreach ($property in @($Node.files.PSObject.Properties)) {
+        $path = if ($Prefix) { "$Prefix/$($property.Name)" } else { $property.Name }
+        if ($property.Value.files) {
+            Get-AsarFileEntries $property.Value $path
+        } else {
+            [pscustomobject]@{ Path = $path; Name = $property.Name; Entry = $property.Value }
+        }
+    }
+}
+
 function Get-TomlStructuralLines([string[]]$Lines) {
     # Preserve line indexes while masking multiline string contents. A heading
     # inside instructions must never be mistaken for the real [desktop] table.
@@ -218,17 +229,17 @@ function Get-LocaleGatePattern {
 function Get-LocaleCompatibility([string]$AppDirectory) {
     $path = Join-Path $AppDirectory 'resources\app.asar'
     $index = Read-AsarIndex $path
-    $assets = $index.Tree.files.webview.files.assets.files
+    $entries = @(Get-AsarFileEntries $index.Tree)
     $targets = @()
-    foreach ($property in $assets.PSObject.Properties) {
-        if ($property.Name -notmatch '^(app-initial|index|general-settings)-.*\.js$') { continue }
-        $content = Read-AsarText $path $index $property.Value
+    foreach ($file in $entries) {
+        if ($file.Path -notmatch '(?i)^webview/assets/(app-initial|index|general-settings)-.*\.js$') { continue }
+        $content = Read-AsarText $path $index $file.Entry
         if ($content.Contains('enable_i18n')) {
             $matches = [regex]::Matches($content, (Get-LocaleGatePattern))
             if ($matches.Count -ne 1 -or -not $content.Contains('localeOverride') -or -not $content.Contains('72216192')) {
-                throw "语言加载逻辑已变化，不能安全修复：$($property.Name)"
+                throw "语言加载逻辑已变化，不能安全修复：$($file.Name)"
             }
-            $targets += [pscustomobject]@{ Name = $property.Name; Entry = $property.Value; Content = $content }
+            $targets += [pscustomobject]@{ Name = $file.Name; Entry = $file.Entry; Content = $content }
         }
     }
     if ($targets.Count -gt 0 -and @($targets | Where-Object { $_.Name -match '^(app-initial|index)-' }).Count -eq 0) {
