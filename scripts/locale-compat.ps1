@@ -187,7 +187,7 @@ function Publish-CompatibilityLauncher($Copy) {
             Arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $runtime 'start-zh.ps1') + '"'
             WorkingDirectory = $toolStateRoot
             IconLocation = $Copy.Executable + ',0'
-            Description = 'Codex zh-CN compatible copy. Re-run the installer after Codex updates.'
+            Description = 'Codex 中文兼容版；官方更新后请重新运行汉化工具'
         }
         $shortcuts += $shortcutPath
     }
@@ -199,32 +199,76 @@ function Get-ShortcutName {
     return 'Codex ' + [string][char]0x4E2D + [char]0x6587 + [char]0x7248 + '.lnk'
 }
 
-function Save-UnicodeShortcut([string]$Path, [hashtable]$Properties) {
-    # WScript.Shell converts the .lnk file name through the ANSI code page. On
-    # English/European Windows (code page 1252) a Chinese name cannot be saved,
-    # so write an ASCII temporary name and rename it with Unicode .NET APIs.
-    $folder = Split-Path -Parent $Path
-    $temp = Join-Path $folder ('codex-zh-' + [guid]::NewGuid().ToString('N') + '.lnk')
-    try {
-        $shell = New-Object -ComObject WScript.Shell
-        $shortcut = $shell.CreateShortcut($temp)
-        foreach ($key in $Properties.Keys) { $shortcut.$key = $Properties[$key] }
-        $shortcut.Save()
-        if ([IO.File]::Exists($Path)) { [IO.File]::Delete($Path) }
-        [IO.File]::Move($temp, $Path)
-    } finally {
-        if ([IO.File]::Exists($temp)) { [IO.File]::Delete($temp) }
+function Initialize-ShellLinkType {
+    # WScript.Shell stores shortcut strings through the ANSI code page, so Chinese
+    # user names or paths turn into "?" on English Windows. IShellLinkW is Unicode.
+    if ('CodexZh.ShellLink' -as [type]) { return }
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+using System.Text;
+namespace CodexZh {
+    [ComImport, Guid("00021401-0000-0000-C000-000000000046")] class CShellLink {}
+    [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("000214F9-0000-0000-C000-000000000046")]
+    interface IShellLinkW {
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder f, int cch, IntPtr pfd, int flags);
+        void GetIDList(out IntPtr ppidl);
+        void SetIDList(IntPtr pidl);
+        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder s, int cch);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string s);
+        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder s, int cch);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string s);
+        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder s, int cch);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string s);
+        void GetHotkey(out short h);
+        void SetHotkey(short h);
+        void GetShowCmd(out int c);
+        void SetShowCmd(int c);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder s, int cch, out int i);
+        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string s, int i);
+        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string s, int r);
+        void Resolve(IntPtr hwnd, int flags);
+        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string s);
     }
+    public static class ShellLink {
+        public static void Save(string path, string target, string arguments, string workingDirectory, string icon, int iconIndex, string description) {
+            var link = (IShellLinkW)new CShellLink();
+            try {
+                link.SetPath(target);
+                link.SetArguments(arguments);
+                link.SetWorkingDirectory(workingDirectory);
+                link.SetIconLocation(icon, iconIndex);
+                link.SetDescription(description);
+                ((IPersistFile)link).Save(path, true);
+            } finally { Marshal.FinalReleaseComObject(link); }
+        }
+        public static string ReadArguments(string path) {
+            var link = (IShellLinkW)new CShellLink();
+            try {
+                ((IPersistFile)link).Load(path, 0);
+                var sb = new StringBuilder(32768);
+                link.GetArguments(sb, sb.Capacity);
+                return sb.ToString();
+            } finally { Marshal.FinalReleaseComObject(link); }
+        }
+    }
+}
+'@
+}
+
+function Save-UnicodeShortcut([string]$Path, [hashtable]$Properties) {
+    Initialize-ShellLinkType
+    $icon = [string]$Properties.IconLocation
+    $index = 0
+    if ($icon -match '^(.*),(-?\d+)$') { $icon = $Matches[1]; $index = [int]$Matches[2] }
+    [CodexZh.ShellLink]::Save($Path, $Properties.TargetPath, $Properties.Arguments,
+        $Properties.WorkingDirectory, $icon, $index, $Properties.Description)
+    if (-not [IO.File]::Exists($Path)) { throw "快捷方式创建失败：$Path" }
 }
 
 function Read-UnicodeShortcutArguments([string]$Path) {
-    $temp = Join-Path ([IO.Path]::GetTempPath()) ('codex-zh-' + [guid]::NewGuid().ToString('N') + '.lnk')
-    try {
-        [IO.File]::Copy($Path, $temp)
-        $shell = New-Object -ComObject WScript.Shell
-        return [string]$shell.CreateShortcut($temp).Arguments
-    } catch { return '' }
-    finally { if ([IO.File]::Exists($temp)) { [IO.File]::Delete($temp) } }
+    try { Initialize-ShellLinkType; return [CodexZh.ShellLink]::ReadArguments($Path) } catch { return '' }
 }
 
 function Get-ShortcutFolders {
