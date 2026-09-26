@@ -36,6 +36,7 @@ $files = @(
     'RELEASE_NOTES_v0.3.1.md',
     'RELEASE_NOTES_v0.3.2.md',
     'RELEASE_NOTES_v0.3.3.md',
+    'RELEASE_NOTES_v0.3.4.md',
     'resources\release.json',
     'resources\bundled-plugins-zh-CN.json',
     'scripts\install_windows.ps1',

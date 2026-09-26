@@ -116,6 +116,8 @@ function Get-ExecutableVersion([string]$PathValue) {
 }
 
 function Get-PackageAppUserModelId($Package) {
+    # The Store manifest has used Application Id "App" for every audited release.
+    if ($Package.FromRegistry) { return "$($Package.PackageFamilyName)!App" }
     try {
         $applicationId = $Package |
             Get-AppxPackageManifest |
@@ -126,7 +128,9 @@ function Get-PackageAppUserModelId($Package) {
             Select-Object -First 1 -ExpandProperty Id
         if ($applicationId) { return "$($Package.PackageFamilyName)!$applicationId" }
     } catch {}
-    throw '无法读取应用启动标识，请先修复 Codex 安装。'
+    # Not fatal: the compatible copy never launches through the Store identity.
+    if ($Package.PackageFamilyName) { return "$($Package.PackageFamilyName)!App" }
+    return ''
 }
 
 function Get-OfficialZhResourceStatus([string]$AppDirectory) {
@@ -211,6 +215,31 @@ function Get-OfficialZhResourceStatus([string]$AppDirectory) {
     return [pscustomobject]$result
 }
 
+function Get-CodexStorePackages {
+    # Get-AppxPackage can fail with a terminating module-load error on trimmed
+    # or policy-restricted Windows 10 images; -ErrorAction does not catch that.
+    try {
+        $found = @(Get-AppxPackage -Name 'OpenAI.Codex' -ErrorAction Stop)
+        if ($found.Count -gt 0) { return $found }
+    } catch {
+        Write-InfoLine "系统应用列表不可用，改用注册表查找商店版：$($_.Exception.Message)"
+    }
+    $repository = 'HKCU:\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\Repository\Packages'
+    $result = @()
+    try {
+        foreach ($key in @(Get-ChildItem -LiteralPath $repository -ErrorAction Stop | Where-Object { $_.PSChildName -like 'OpenAI.Codex_*' })) {
+            $root = (Get-ItemProperty -LiteralPath $key.PSPath -ErrorAction SilentlyContinue).PackageRootFolder
+            $parts = $key.PSChildName -split '_'
+            if (-not $root -or $parts.Count -lt 5) { continue }
+            $result += [pscustomobject]@{
+                Name = $parts[0]; Version = $parts[1]; InstallLocation = $root
+                PackageFamilyName = $parts[0] + '_' + $parts[-1]; FromRegistry = $true
+            }
+        }
+    } catch {}
+    return $result
+}
+
 function Get-CodexInfo {
     # An explicit path or environment override always wins over Store detection.
     if ([string]::IsNullOrWhiteSpace($CodexPath)) {
@@ -223,7 +252,7 @@ function Get-CodexInfo {
         if (-not $appDir) {
             throw "指定的目录不是有效的 Codex 安装目录：$CodexPath"
         }
-        $package = Get-AppxPackage -Name 'OpenAI.Codex' -ErrorAction SilentlyContinue |
+        $package = Get-CodexStorePackages |
             Where-Object { Test-PathWithin $appDir $_.InstallLocation } |
             Select-Object -First 1
         return [pscustomobject]@{
@@ -237,7 +266,7 @@ function Get-CodexInfo {
         }
     }
 
-    $package = Get-AppxPackage -Name 'OpenAI.Codex' -ErrorAction SilentlyContinue |
+    $package = Get-CodexStorePackages |
         Sort-Object { [version]$_.Version } -Descending |
         Select-Object -First 1
     if ($package) {

@@ -29,6 +29,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\test-unattended.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\test-bootstrap.ps1 -HeadlessRunner
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\test-copy-failures.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\test-discovery.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\test-store-fallback.ps1
 ```
 
 涉及发布包、长路径或启动器时，还要运行 `tests\test-release.ps1` 或对应的专项测试。修改安装流程后必须在 GitHub Actions 的 Windows Runner 上重新跑 CI；CI 通过后仍要把真实 Windows 10 和 Windows 11 机器测试列为人工验收项。

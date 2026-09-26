@@ -85,6 +85,22 @@ jobs:
           .\tests\test-discovery.ps1
           $global:LASTEXITCODE = 0
 
+      - name: 商店版查找兜底与磁盘预检
+        shell: powershell
+        run: |
+          .\tests\test-store-fallback.ps1
+          $global:LASTEXITCODE = 0
+
+      - name: BAT 入口必须为 CRLF
+        shell: powershell
+        run: |
+          $bad = Get-ChildItem -Recurse -Include *.bat,*.vbs | Where-Object {
+            $b = [IO.File]::ReadAllBytes($_.FullName)
+            for ($i = 0; $i -lt $b.Length; $i++) { if ($b[$i] -eq 10 -and ($i -eq 0 -or $b[$i-1] -ne 13)) { return $true } }
+            $false
+          }
+          if ($bad) { throw "LF-only line endings: $($bad.FullName -join ', ')" }
+
       - name: 失败时上传诊断文件
         if: failure()
         uses: actions/upload-artifact@v4
@@ -92,3 +108,33 @@ jobs:
           name: ci-diagnostics
           path: diagnostics/**
           if-no-files-found: ignore
+
+  # 可选：维护者上传真实 MSIX（例如 Release 附件或内部存储）后手动触发，
+  # 对真实 app.asar 执行渲染组件对照、补丁和完整性校验。
+  real-package:
+    name: 真实 Codex 安装包审计
+    if: github.event_name == 'workflow_dispatch' && vars.CODEX_MSIX_URL != ''
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: 下载并解出 app.asar
+        shell: powershell
+        run: |
+          Invoke-WebRequest -Uri '${{ vars.CODEX_MSIX_URL }}' -OutFile codex.msix
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [IO.Compression.ZipFile]::OpenRead((Resolve-Path codex.msix))
+          try {
+            $entry = $zip.Entries | Where-Object FullName -eq 'app/resources/app.asar'
+            [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, "$PWD\app.asar", $true)
+          } finally { $zip.Dispose() }
+      - name: 官方中文资源审计
+        run: node scripts/analyze-codex-asar.mjs app.asar
+      - name: 翻译开关对照与补丁完整性
+        run: python tests/test-locale-gate.py app.asar

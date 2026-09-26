@@ -92,6 +92,26 @@ function Get-ActiveCompatibilityCopy {
     return $record
 }
 
+function Get-DirectorySize([string]$Path) {
+    $total = 0L
+    foreach ($file in [IO.Directory]::EnumerateFiles($Path, '*', [IO.SearchOption]::AllDirectories)) {
+        try { $total += ([IO.FileInfo]::new($file)).Length } catch {}
+    }
+    return $total
+}
+
+function Assert-CopySpace([string]$SourceDirectory, [string]$TargetRoot) {
+    # Fail before robocopy starts, with a message ordinary users can act on.
+    try {
+        $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot([IO.Path]::GetFullPath($TargetRoot)))
+        $free = $drive.AvailableFreeSpace
+        $needed = [long]((Get-DirectorySize $SourceDirectory) * 1.1) + 200MB
+    } catch { return } # Unknown size or network drive: let robocopy report errors.
+    if ($free -lt $needed) {
+        throw ('磁盘空间不足：中文副本约需 {0:N1} GB，{1} 仅剩 {2:N1} GB。请清理磁盘后重试。' -f ($needed / 1GB), $drive.Name, ($free / 1GB))
+    }
+}
+
 function New-CompatibilityCopy($Source) {
     $sourceAsar = Join-Path $Source.AppDirectory 'resources\app.asar'
     $sourceHash = (Get-FileHash -LiteralPath $sourceAsar -Algorithm SHA256).Hash
@@ -104,6 +124,7 @@ function New-CompatibilityCopy($Source) {
     $copiesRoot = Join-Path $toolStateRoot 'copies'
     if (Test-PathWithin $toolStateRoot $Source.AppDirectory) { throw '工具数据目录不能位于 Codex 程序目录中。' }
     [void][IO.Directory]::CreateDirectory($copiesRoot)
+    Assert-CopySpace $Source.AppDirectory $copiesRoot
     $copyPath = Join-Path $copiesRoot ([guid]::NewGuid().ToString('N'))
     [void][IO.Directory]::CreateDirectory($copyPath)
     $copyLog = Join-Path $toolStateRoot ('copy-' + (Split-Path -Leaf $copyPath) + '.log')
@@ -223,7 +244,8 @@ function Read-AsarText([string]$Path, $Index, $Entry) {
 
 function Get-LocaleGatePattern {
     # Handles the optional layer and the direct layer call used by settings.
-    return '[A-Za-z_$][\w$]*(?:\(`72216192`\))?\?\.get\(`enable_i18n`,![01]\)'
+    # The Statsig layer id is not part of the contract: new releases may rename it.
+    return '[A-Za-z_$][\w$]*(?:\(`\d{4,}`\))?\?\.get\(`enable_i18n`,![01]\)'
 }
 
 function Get-LocaleCompatibility([string]$AppDirectory) {
@@ -235,8 +257,9 @@ function Get-LocaleCompatibility([string]$AppDirectory) {
         if ($file.Path -notmatch '(?i)^webview/assets/(app-initial|index|general-settings)-.*\.js$') { continue }
         $content = Read-AsarText $path $index $file.Entry
         if ($content.Contains('enable_i18n')) {
-            $matches = [regex]::Matches($content, (Get-LocaleGatePattern))
-            if ($matches.Count -ne 1 -or -not $content.Contains('localeOverride') -or -not $content.Contains('72216192')) {
+            $gateMatches = [regex]::Matches($content, (Get-LocaleGatePattern))
+            if ($gateMatches.Count -ne 1 -or -not $content.Contains('localeOverride') -or
+                [regex]::Matches($content, 'enable_i18n').Count -ne 1) {
                 throw "语言加载逻辑已变化，不能安全修复：$($file.Name)"
             }
             $targets += [pscustomobject]@{ Name = $file.Name; Entry = $file.Entry; Content = $content }
