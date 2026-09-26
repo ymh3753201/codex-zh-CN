@@ -177,22 +177,54 @@ function Publish-CompatibilityLauncher($Copy) {
     $runtime = Join-Path $toolStateRoot 'launcher'
     [void][IO.Directory]::CreateDirectory($runtime)
     Copy-Item -LiteralPath (Join-Path $scriptDir 'start-zh.ps1') -Destination (Join-Path $runtime 'start-zh.ps1') -Force
-    $shell = New-Object -ComObject WScript.Shell
     $shortcuts = @()
     foreach ($folder in (Get-ShortcutFolders)) {
         if ([string]::IsNullOrWhiteSpace($folder)) { continue }
         [void][IO.Directory]::CreateDirectory($folder)
-        $shortcutPath = Join-Path $folder 'Codex 中文版.lnk'
-        $shortcut = $shell.CreateShortcut($shortcutPath)
-        $shortcut.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-        $shortcut.Arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $runtime 'start-zh.ps1') + '"'
-        $shortcut.WorkingDirectory = $toolStateRoot
-        $shortcut.IconLocation = $Copy.Executable + ',0'
-        $shortcut.Description = 'Codex 中文兼容版；官方更新后请重新运行汉化工具'
-        $shortcut.Save()
+        $shortcutPath = Join-Path $folder (Get-ShortcutName)
+        Save-UnicodeShortcut $shortcutPath @{
+            TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+            Arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $runtime 'start-zh.ps1') + '"'
+            WorkingDirectory = $toolStateRoot
+            IconLocation = $Copy.Executable + ',0'
+            Description = 'Codex zh-CN compatible copy. Re-run the installer after Codex updates.'
+        }
         $shortcuts += $shortcutPath
     }
     Write-TextFile (Join-Path $toolStateRoot 'shortcuts.json') (ConvertTo-Json -InputObject @($shortcuts))
+}
+
+function Get-ShortcutName {
+    # Built from code points so the name survives any console or file encoding.
+    return 'Codex ' + [string][char]0x4E2D + [char]0x6587 + [char]0x7248 + '.lnk'
+}
+
+function Save-UnicodeShortcut([string]$Path, [hashtable]$Properties) {
+    # WScript.Shell converts the .lnk file name through the ANSI code page. On
+    # English/European Windows (code page 1252) a Chinese name cannot be saved,
+    # so write an ASCII temporary name and rename it with Unicode .NET APIs.
+    $folder = Split-Path -Parent $Path
+    $temp = Join-Path $folder ('codex-zh-' + [guid]::NewGuid().ToString('N') + '.lnk')
+    try {
+        $shell = New-Object -ComObject WScript.Shell
+        $shortcut = $shell.CreateShortcut($temp)
+        foreach ($key in $Properties.Keys) { $shortcut.$key = $Properties[$key] }
+        $shortcut.Save()
+        if ([IO.File]::Exists($Path)) { [IO.File]::Delete($Path) }
+        [IO.File]::Move($temp, $Path)
+    } finally {
+        if ([IO.File]::Exists($temp)) { [IO.File]::Delete($temp) }
+    }
+}
+
+function Read-UnicodeShortcutArguments([string]$Path) {
+    $temp = Join-Path ([IO.Path]::GetTempPath()) ('codex-zh-' + [guid]::NewGuid().ToString('N') + '.lnk')
+    try {
+        [IO.File]::Copy($Path, $temp)
+        $shell = New-Object -ComObject WScript.Shell
+        return [string]$shell.CreateShortcut($temp).Arguments
+    } catch { return '' }
+    finally { if ([IO.File]::Exists($temp)) { [IO.File]::Delete($temp) } }
 }
 
 function Get-ShortcutFolders {
@@ -202,11 +234,10 @@ function Get-ShortcutFolders {
 function Remove-CompatibilityLauncher {
     foreach ($folder in (Get-ShortcutFolders)) {
         if ([string]::IsNullOrWhiteSpace($folder)) { continue }
-        $path = Join-Path $folder 'Codex 中文版.lnk'
+        $path = Join-Path $folder (Get-ShortcutName)
         if (Test-Path -LiteralPath $path) {
-            $shell = New-Object -ComObject WScript.Shell
-            $shortcut = $shell.CreateShortcut($path)
-            if ($shortcut.Arguments.Contains((Join-Path $toolStateRoot 'launcher\start-zh.ps1'))) { Remove-Item -LiteralPath $path -Force }
+            $arguments = Read-UnicodeShortcutArguments $path
+            if ($arguments -and $arguments.Contains((Join-Path $toolStateRoot 'launcher\start-zh.ps1'))) { Remove-Item -LiteralPath $path -Force }
         }
     }
     $record = Join-Path $toolStateRoot 'active-copy.json'

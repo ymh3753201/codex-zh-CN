@@ -116,9 +116,7 @@ try {
     $firstPath = $active.AppDirectory
     $shortcutPath = Join-Path $root 'desktop\Codex 中文版.lnk'
     Assert (Test-Path -LiteralPath $shortcutPath) 'Desktop shortcut must be created'
-    $shell = New-Object -ComObject WScript.Shell
-    $shortcut = $shell.CreateShortcut($shortcutPath)
-    Assert ($shortcut.Arguments.Contains((Join-Path $toolStateRoot 'launcher\start-zh.ps1'))) 'Shortcut must target persistent launcher'
+    Assert ((Read-UnicodeShortcutArguments $shortcutPath).Contains((Join-Path $toolStateRoot 'launcher\start-zh.ps1'))) 'Shortcut must target persistent launcher'
     Invoke-Install
     Assert ((Get-ActiveCompatibilityCopy).AppDirectory -eq $firstPath) 'Repeated installation must reuse a verified copy'
     $persistentLauncher = Join-Path $toolStateRoot 'launcher\start-zh.ps1'
