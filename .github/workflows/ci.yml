@@ -108,6 +108,13 @@ jobs:
           }
           if ($bad) { throw "LF-only line endings: $($bad.FullName -join ', ')" }
 
+      - name: 上传发布包
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-zh-CN-release
+          path: dist/codex-zh-CN-v*.zip
+          if-no-files-found: error
+
       - name: 失败时上传诊断文件
         if: failure()
         uses: actions/upload-artifact@v4
