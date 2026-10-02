@@ -2,7 +2,7 @@
 <#
   真实端到端验证：安装官方 MSIX → 运行真实安装器（不打桩）→ 启动中文副本 →
   用 Chrome DevTools 协议读取窗口语言并截图 → 官方程序作英文对照 → 恢复英文。
-  需要：可交互桌面会话（GitHub windows-2022 / windows-2025 托管运行器满足），Node 18+。
+  需要：可交互桌面会话（GitHub windows-2022 / windows-2025 托管运行器满足），Node 22+。
 #>
 param(
     [Parameter(Mandatory)] [string]$MsixPath,
@@ -45,6 +45,7 @@ try {
 
     Step 'status-before' {
         $json = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'scripts\install_windows.ps1') -Action status -Json
+        if ($LASTEXITCODE -ne 0) { throw 'Status command failed' }
         $json | Set-Content -LiteralPath (Join-Path $OutDir 'status-before.json') -Encoding UTF8
         $s = $json | ConvertFrom-Json
         if (-not $s.codexFound -or -not $s.officialZhResources) { throw "Status before install not ready: $json" }
@@ -54,6 +55,7 @@ try {
     Step 'real-install' {
         # Real entry point, real robocopy and patch; no restart so the test controls launch flags.
         & cmd.exe /c "`"$repo\install-windows.bat`"" 2>&1 | Tee-Object -FilePath (Join-Path $OutDir 'install-output.txt') | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw 'Real BAT installer failed' }
         $state = Join-Path $env:USERPROFILE '.codex\zh-cn-tool\active-copy.json'
         if (-not (Test-Path -LiteralPath $state)) { throw 'Installer did not publish active-copy.json' }
         $script:copy = Get-Content -LiteralPath $state -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -63,6 +65,7 @@ try {
 
     Step 'status-after' {
         $json = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repo 'scripts\install_windows.ps1') -Action status -Json
+        if ($LASTEXITCODE -ne 0) { throw 'Status command failed' }
         $json | Set-Content -LiteralPath (Join-Path $OutDir 'status-after.json') -Encoding UTF8
         $s = $json | ConvertFrom-Json
         if (-not $s.localizationReady) { throw "localizationReady=false after install: $json" }
@@ -86,6 +89,7 @@ try {
             $data = Join-Path $env:TEMP 'codex-official-control'
             Start-Process -FilePath $exe -ArgumentList @("--user-data-dir=`"$data`"", "--remote-debugging-port=$OfficialPort")
             & node $check $OfficialPort (Join-Path $OutDir 'official') any
+            if ($LASTEXITCODE -ne 0) { throw 'Official control UI check failed' }
             Stop-Tree (Join-Path $pkg.InstallLocation 'app')
         }
     }

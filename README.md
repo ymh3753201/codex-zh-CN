@@ -2,7 +2,9 @@
 
 用于 Windows 10 / Windows 11 的非官方离线汉化工具，使用 Codex 自带的中文资源。
 
-v0.3.4 改善启动失败提示、自定义安装路径识别和中文副本状态检查。完整解压新版到新文件夹后运行，不要只替换 BAT 文件。
+**v0.3.5 当前为待验收版本，尚未正式发布。** Windows 10 / Windows 11 的真实安装、界面中文和恢复验收尚未完成。
+
+v0.3.5 改善新版语言开关识别、商店查找兜底、磁盘空间提示和英文系统上的中文快捷方式。完整解压新版到新文件夹后运行，不要只替换 BAT 文件。
 
 双击“一键安装”完全没反应时，尝试同目录的 `install-fallback.vbs`。它绕过 BAT 入口直接启动安装器；如果系统禁用了脚本，这个入口也可能无法执行。
 
@@ -10,7 +12,7 @@ v0.3.4 改善启动失败提示、自定义安装路径识别和中文副本状�
 
 ## 怎么使用
 
-**安装在“准备中文程序”阶段报路径错误？** 请解压 v0.3.3，重新运行 **一键安装.bat**。本版修复复制后的深层目录处理问题，无需修改注册表或安装 PowerShell 7。如果仍失败，请保留 `diagnostics` 中的新报告及报告指向的复制日志。
+**安装在“准备中文程序”阶段报路径错误？** 请完整解压维护者提供的新版工具，重新运行 **一键安装.bat**。本版修复复制后的深层目录处理问题，无需修改注册表或安装 PowerShell 7。如果仍失败，请保留 `diagnostics` 中的新报告及报告指向的复制日志。
 
 **已经汉化成功，但每次启动都提示“官方 Codex 或旧中文副本仍在运行”？** 双击 **修复启动.bat**，看到“启动器和中文快捷方式已修复”后，使用桌面或开始菜单的“Codex 中文版”打开。此入口只修复启动，不修复尚未完成的安装。
 
@@ -117,9 +119,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tests\test-release.ps1
 
 开发测试中的 Python / Node.js 不是用户安装时的依赖。真实安装包测试需要本机已安装所审查的 Codex 版本。证据和边界见 [排查报告](docs/diagnosis-v0.3.0.md)。
 
-推送到仓库后，GitHub Actions 会自动运行与中文快捷方式无关的用例：配置回归、启动器、无按键入口、Bootstrap、隐藏控制台、复制失败、安装位置识别和发布包打包，见 `.github/workflows/ci.yml`。
+推送主分支或 `codex/` 分支后，GitHub Actions 会自动运行以下用例：配置回归、启动器、无按键入口、Bootstrap、隐藏控制台、复制失败、安装位置识别和发布包打包，并对生成的 ZIP 再运行安装回归和源码哈希校验，见 `.github/workflows/ci.yml`。
 
-其余用例只在本地手动运行：`test-installer.ps1`、`test-runtime.ps1`、`test-student-matrix.ps1` 和 `test-locale-gate.py` 需要本机已安装所审查的 Codex 版本；`test-workflow.ps1` 和 `test-release.ps1` 需要中文代码页的 Windows——GitHub 托管的英文 Windows 运行器使用 ANSI 代码页 1252，WScript.Shell 在该代码页下无法创建中文名快捷方式。
+中文快捷方式使用 Windows 的 Unicode 接口，`test-workflow.ps1` 和发布 ZIP 的回归检查现在也在英文系统运行。CI 使用 `test-release.ps1 -HeadlessRunner -SkipInstalledAppTests`：只跳过需要真实 Codex 安装的隔离用例，并把失败窗口的人工按键等待留给实机检查；不会跳过副本、长路径或快捷方式测试。
+
+`test-installer.ps1`、`test-runtime.ps1`、`test-student-matrix.ps1` 和 `test-locale-gate.py` 的完整验证仍需要所审查的真实 Codex 安装包或 Windows 环境。真实端到端工作流还需提供 `CODEX_MSIX_URL`；当前未提供地址，也没有该工作流的成功记录。GitHub Windows Server 运行器不等于 Windows 10/11 实机。
 
 自动安装改进见 [v0.3.1 更新说明](RELEASE_NOTES_v0.3.1.md)。
 

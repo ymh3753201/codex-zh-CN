@@ -118,8 +118,12 @@ function New-CompatibilityCopy($Source) {
     $previous = Get-ActiveCompatibilityCopy
     if ($previous -and $previous.SourceHash -eq $sourceHash -and $previous.ToolVersion -eq $toolVersion -and
         $previous.SourceDirectory -eq $Source.AppDirectory) {
-        if ((Get-FileHash -LiteralPath (Join-Path $previous.AppDirectory 'resources\app.asar')).Hash -eq $previous.PatchedHash -and
-            (Get-FileHash -LiteralPath $previous.Executable).Hash -eq $previous.ExecutableHash) { return $previous }
+        try {
+            if ((Get-FileHash -LiteralPath (Join-Path $previous.AppDirectory 'resources\app.asar')).Hash -eq $previous.PatchedHash -and
+                (Get-FileHash -LiteralPath $previous.Executable).Hash -eq $previous.ExecutableHash) { return $previous }
+        } catch {
+            Write-WarnLine '旧中文副本的文件缺失或无法读取，将重新准备副本。旧副本和备份会保留。'
+        }
     }
     $copiesRoot = Join-Path $toolStateRoot 'copies'
     if (Test-PathWithin $toolStateRoot $Source.AppDirectory) { throw '工具数据目录不能位于 Codex 程序目录中。' }

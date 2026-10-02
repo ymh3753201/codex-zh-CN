@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 $ErrorActionPreference = 'Stop'
 $root = Join-Path ([IO.Path]::GetTempPath()) ('codex-zh-discovery-' + [guid]::NewGuid().ToString('N'))
 $oldDesktop = $env:CODEX_DESKTOP_PATH

@@ -36,9 +36,18 @@ function connect(url) {
     ws.onopen = () =>
       resolve({
         send: (method, params = {}) =>
-          new Promise((done) => {
-            pending.set(++id, done);
-            ws.send(JSON.stringify({ id, method, params }));
+          new Promise((done, fail) => {
+            const requestId = ++id;
+            const timer = setTimeout(() => {
+              pending.delete(requestId);
+              fail(new Error(`CDP request timed out: ${method}`));
+            }, 15_000);
+            pending.set(requestId, (msg) => {
+              clearTimeout(timer);
+              if (msg.error) fail(new Error(`CDP ${method}: ${msg.error.message}`));
+              else done(msg);
+            });
+            ws.send(JSON.stringify({ id: requestId, method, params }));
           }),
         close: () => ws.close(),
       });
@@ -60,6 +69,7 @@ await sleep(3000); // let async locale messages arrive
 const r2 = await cdp.send("Runtime.evaluate", { expression: probe, returnByValue: true });
 state = r2.result?.result?.value ?? state;
 const shot = await cdp.send("Page.captureScreenshot", { format: "png" });
+if (!shot.result?.data) throw new Error("CDP did not return a screenshot");
 if (shot.result?.data) fs.writeFileSync(`${outPrefix}.png`, Buffer.from(shot.result.data, "base64"));
 cdp.close();
 
@@ -69,6 +79,9 @@ const report = { port: Number(port), expect, lang: state.lang, url: state.url, c
 fs.writeFileSync(`${outPrefix}.json`, JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
 
+if (!state.lang || state.text.replace(/\s/g, "").length < 20) {
+  console.error("FAIL: window has no usable language or visible UI"); process.exit(1);
+}
 const chinese = state.lang.toLowerCase().startsWith("zh") && cjk >= 10;
 if (expect === "zh" && !chinese) { console.error("FAIL: expected a Chinese UI"); process.exit(1); }
 if (expect === "en" && chinese) { console.error("FAIL: control window unexpectedly Chinese"); process.exit(1); }

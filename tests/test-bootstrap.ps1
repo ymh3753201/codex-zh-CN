@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 # -HeadlessRunner：无控制台的运行器（例如 GitHub Actions 托管运行器）上 cmd 的 pause 会立即返回，
 # 交互等待本身只能在本机带控制台的 Windows 上验证。
 param([string]$PackageRoot = '', [switch]$HeadlessRunner)

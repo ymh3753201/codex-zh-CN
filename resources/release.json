@@ -1,5 +1,5 @@
 {
-  "repo": "xqnode/codex-zh-CN",
+  "repo": "ymh3753201/codex-zh-CN",
   "release": "0.3.5",
   "strategy": "locale-compatible-copy",
   "testedCodexVersion": "26.917.9434.0",
@@ -17,6 +17,8 @@
   "validation": {
     "windows11": "26.911.7940.0 real renderer gate and integrity checks, isolated compatible-copy runtime and repeated-launch smoke passed; not full visual acceptance",
     "windows10": "User confirmed v0.3.0 localization works; v0.3.3 legacy long-path workflow tested under Windows PowerShell 5.1 with process-local legacy .NET switches; onsite confirmation pending",
-    "msix26917": "Offline MSIX audit on macOS: gate located in app-initial and general-settings, patch applied by locale-compat.ps1 (pwsh 7), ASAR per-file and block hashes verified, no embedded header hash in ChatGPT.exe/chrome.dll; not a Windows runtime test"
-  }
+    "msix26917": "Offline MSIX audit on macOS: gate located in app-initial and general-settings, patch applied by locale-compat.ps1 (pwsh 7), ASAR per-file and block hashes verified, no embedded header hash in ChatGPT.exe/chrome.dll; not a Windows runtime test",
+    "releaseReadiness": "Candidate only: Windows 10 and Windows 11 v0.3.5 installation, UI and recovery acceptance pending"
+  },
+  "upstreamRepo": "xqnode/codex-zh-CN"
 }

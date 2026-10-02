@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "codex/**"]
   pull_request:
   workflow_dispatch:
 
@@ -32,9 +32,7 @@ jobs:
           Write-Host "Windows PowerShell: $($PSVersionTable.PSVersion)"
           Write-Host "系统版本: $([Environment]::OSVersion.VersionString)"
           Write-Host "系统 ANSI 代码页: $((Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\Nls\CodePage').ACP)"
-          # GitHub 托管的 Windows 运行器是英文系统（ANSI 代码页 1252）。
-          # WScript.Shell 在该代码页下无法创建中文名快捷方式，因此依赖
-          # 中文快捷方式的用例留到本地中文 Windows 上运行。
+          # 中文快捷方式使用 Unicode 接口，英文系统也要验证中文路径。
           $global:LASTEXITCODE = 0
 
       - name: 打包发布包
@@ -107,6 +105,29 @@ jobs:
             $false
           }
           if ($bad) { throw "LF-only line endings: $($bad.FullName -join ', ')" }
+
+      - name: PowerShell 编码与语法
+        shell: powershell
+        run: |
+          foreach ($file in @(Get-ChildItem scripts,tests -Recurse -Filter *.ps1)) {
+            $bytes = [IO.File]::ReadAllBytes($file.FullName)
+            if (($bytes[0..2] -join ',') -ne '239,187,191') { throw "Missing UTF-8 BOM: $($file.FullName)" }
+            $parseErrors = $null
+            [void][Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$null, [ref]$parseErrors)
+            if ($parseErrors) { throw ($parseErrors | Out-String) }
+          }
+
+      - name: 发布 ZIP 校验与安装回归
+        shell: powershell
+        run: |
+          .\tests\test-release.ps1 -HeadlessRunner -SkipInstalledAppTests
+          $global:LASTEXITCODE = 0
+
+      - name: 界面语言检查的成功与失败判定
+        shell: powershell
+        run: |
+          node tests/test-cdp-check.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'CDP checker regression failed' }
 
       - name: 上传发布包
         uses: actions/upload-artifact@v4
