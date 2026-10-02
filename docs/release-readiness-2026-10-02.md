@@ -22,6 +22,7 @@
 
 - 本地 macOS：全部 PowerShell 文件语法检查通过（PowerShell 7）；七种界面检查判定通过；发布 ZIP 全部 25 个文件与源码逐字节一致，PowerShell BOM 和 BAT/VBS CRLF 检查通过。
 - 上次 Windows CI 对应旧提交 `d4f96e8`，[运行记录](https://github.com/ymh3753201/codex-zh-CN/actions/runs/36249249459)通过，但没有执行本次新增的发布 ZIP 回归。
+- 第一轮新增界面检查测试发现 Windows 盘符路径不能直接传入 Node 的 `--import`。已改用标准文件 URL，并重新执行本地测试；安装和发布 ZIP 检查在该轮已通过。
 - 本次 Windows PowerShell 5.1 测试以审查分支对应提交的 [GitHub Actions](https://github.com/ymh3753201/codex-zh-CN/actions/workflows/ci.yml) 记录为准，必须全部通过后才交付审查分支。
 - 本次对公开前可达提交历史中的 144 个文本/二进制文件版本执行常见凭据模式检查，未发现匹配的令牌、私钥或带鉴权参数的下载链接。这是有限的模式扫描，不是对任意敏感信息的完整保证。公开前还应核对最终新增提交。
 

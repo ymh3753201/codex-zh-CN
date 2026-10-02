@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-zh-cdp-'));
 const checker = fileURLToPath(new URL('./e2e/cdp-check.mjs', import.meta.url));
@@ -38,7 +38,7 @@ try {
     ['blank-language', 'any', false], ['missing-shot', 'any', false],
     ['protocol-error', 'any', false], ['timeout', 'any', false],
   ]) {
-    const result = spawnSync(process.execPath, ['--import', fixture, checker, '9333', path.join(root, scenario), expect], {
+    const result = spawnSync(process.execPath, ['--import', pathToFileURL(fixture).href, checker, '9333', path.join(root, scenario), expect], {
       env: { ...process.env, CDP_TEST_SCENARIO: scenario }, encoding: 'utf8', timeout: 10000,
     });
     assert.ifError(result.error);
