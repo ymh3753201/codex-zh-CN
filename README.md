@@ -85,6 +85,24 @@ v0.3.0 自动识别这段逻辑，在用户目录的程序副本中启用翻译�
 - 当前官方安装清单最低要求为 Windows 构建 `19041`。截图中的 Windows 10 22H2 不能仅因系统名称就被判为不支持。
 - 程序结构无法识别时会停止。官方尚未翻译的词条、在线内容及模型回答不属于本工具保证范围。
 
+## 如何看 AI 的安装报告
+
+`ready: true` 是早期保留字段，只表示发现了官方中文资源，**不能证明安装完成或界面已经中文**。新版状态报告同时提供：
+
+- `toolVersion`：当前检查工具的版本；`compatibleCopyToolVersion`：制作现有中文副本时使用的工具版本。
+- `resourcesReady`：中文资源是否齐备，与旧 `ready` 含义相同。
+- `localizationReady`：语言配置、当前副本和启动器是否准备就绪。
+- `uiLanguageVerified: false` / `uiVerificationStatus: pending-user-check`：本工具没有检查窗口语言，需用户打开中文版确认；这本身不是安装失败。
+- `nextAction`：下一步。`open-chinese-shortcut-and-check-ui` 表示打开中文版检查界面；`repair-launcher` 表示修复启动入口；`reinstall-compatible-copy` 表示副本过期或损坏，需重新安装。
+
+安装包版本、可执行文件元数据版本和“关于”版本可能采用不同编号。反馈问题时一并提供这些编号，不要仅因编号不同就判断装错版本。
+
+**让当前 Codex 中的 AI 帮忙安装时，使用 `-NoRestart`。** 先保留正在执行的任务，安装结束后保存任务并手动退出官方 Codex，再从“Codex 中文版”打开。没有打开界面前，应报告“安装准备完成，界面待确认”。
+
+“修复启动”只修复启动器和快捷方式，不会重新复制或修补程序，不能解决所有仍显示英文的问题。副本过期或损坏时，新版会拒绝此操作并提示重新安装。如果副本检查正常但界面仍是英文，请提供状态报告和截图给助教，不要反复重装。官方更新不会自动更新中文副本，旧副本可能继续显示中文但仍是旧版本；应重新汉化后再验收。
+
+2026-10-03 收到的学员报告说明 v0.3.4 在 Windows 10 构建 19045、Store `26.928.1915.0` 上完成了安装准备。尚未取得原始诊断文件、中文版启动和界面验收证据，不能据此宣布该版本全面兼容。分析见 [学员报告审查](docs/student-report-review-2026-10-03.md)。
+
 ## 高级选项
 
 普通用户不需要运行以下命令。
@@ -95,6 +113,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install_windows.ps1 
 
 # 只修改语言配置，不制作兼容副本（受官方翻译开关影响）
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install_windows.ps1 -Mode builtin -NoRestart
+
+# 当前 Codex 中的 AI 执行安装：保留正在运行的窗口
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install_windows.ps1 -NoRestart
 
 # 输出机器可读状态
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install_windows.ps1 -Action status -Json

@@ -690,7 +690,9 @@ function Get-StatusReport {
                 (Get-FileHash -LiteralPath $activeCopy.Executable -Algorithm SHA256).Hash -eq $activeCopy.ExecutableHash -and
                 -not (Get-LocaleCompatibility $activeCopy.AppDirectory).Gated
             $launcherPath = Join-Path $toolStateRoot 'launcher\start-zh.ps1'
-            $copyLauncherReady = (Test-Path -LiteralPath $launcherPath -PathType Leaf)
+            $copyLauncherReady = (Test-Path -LiteralPath $launcherPath -PathType Leaf) -and
+                (Get-FileHash -LiteralPath $launcherPath -Algorithm SHA256).Hash -eq
+                (Get-FileHash -LiteralPath (Join-Path $scriptDir 'start-zh.ps1') -Algorithm SHA256).Hash
         } catch { $copyError = $_.Exception.Message }
     }
     $testedVersion = ''
@@ -702,12 +704,28 @@ function Get-StatusReport {
     if (Test-Path -LiteralPath $releasePath) {
         try { $testedVersion = (Get-Content -LiteralPath $releasePath -Raw -Encoding UTF8 | ConvertFrom-Json).testedCodexVersion } catch {}
     }
+    $resourcesReady = [bool]$codex.Found -and [bool]$officialZh.Complete
+    $localizationReady = ($locale -eq 'zh-CN') -and $resourcesReady -and
+        (-not $compatibility.Gated -or ($copyCurrent -and $copyPatched -and $copyLauncherReady))
+    $nextAction = if (-not $resourcesReady) { 'check-codex-installation' }
+        elseif ($activeCopy -and (-not $copyCurrent -or -not $copyPatched)) { 'reinstall-compatible-copy' }
+        elseif ($locale -ne 'zh-CN') { 'run-installer' }
+        elseif ($activeCopy -and -not $copyLauncherReady) { 'repair-launcher' }
+        elseif (-not $localizationReady) { 'run-installer' }
+        elseif ($activeCopy) { 'open-chinese-shortcut-and-check-ui' }
+        else { 'restart-codex-and-check-ui' }
     return [pscustomobject]@{
+        toolVersion = $toolVersion
+        resourcesReady = $resourcesReady
+        readyMeaning = 'official-chinese-resources-found-only'
+        uiVerificationStatus = 'pending-user-check'
+        nextAction = $nextAction
         codexFound = [bool]$codex.Found
         codexVersion = $codex.Version
         executableVersion = $codex.ExecutableVersion
         appVersion = if ($compatibility) { $compatibility.AppVersion } else { '' }
         translationGatePresent = [bool]($compatibility -and $compatibility.Gated)
+        compatibleCopyToolVersion = if ($activeCopy) { $activeCopy.ToolVersion } else { '' }
         compatibleCopy = if ($activeCopy) { $activeCopy.AppDirectory } else { '' }
         compatibleCopyCurrent = $copyCurrent
         compatibleCopyPatched = $copyPatched
@@ -738,9 +756,9 @@ function Get-StatusReport {
         pluginsLocalized = $plugins.Localized
         pluginsTotal = $plugins.Total
         pluginsChangedByCodex = $plugins.Stale
-        localizationReady = (($locale -eq 'zh-CN') -and [bool]$codex.Found -and [bool]$officialZh.Complete -and
-            (-not $compatibility.Gated -or ($copyCurrent -and $copyPatched -and $copyLauncherReady)))
-        ready = ([bool]$codex.Found -and [bool]$officialZh.Complete)
+        localizationReady = $localizationReady
+        # Keep the old field for existing callers; it never represented UI acceptance.
+        ready = $resourcesReady
     }
 }
 
@@ -750,7 +768,7 @@ function Show-Status($Report) {
     if (-not $Report.windowsBuildSupported) { Write-WarnLine '本机 Codex 安装包要求 Windows 10 构建 19041 或更新版本；请核对安装包要求。' }
     if ($Report.codexFound) {
         Write-Ok "已找到 Codex $($Report.codexVersion)（$($Report.installType)）"
-        Write-InfoLine "实际程序版本：$($Report.executableVersion)"
+        Write-InfoLine "可执行文件元数据版本：$($Report.executableVersion)（可能为运行时编号；反馈问题请同时提供安装包和关于窗口版本）"
         Write-InfoLine "关于窗口版本：$($Report.appVersion)（与安装包版本采用不同编号，不代表装错版本）"
         Write-InfoLine "安装位置：$($Report.codexPath)"
     } else {
@@ -759,6 +777,8 @@ function Show-Status($Report) {
     if ($Report.localeZhCn) { Write-Ok '语言配置：简体中文（不等于已验证当前窗口）' }
     else { Write-WarnLine "界面语言尚未设为中文（当前：$($Report.locale)）" }
     Write-InfoLine "配置文件：$($Report.configPath)"
+    Write-InfoLine 'ready / resourcesReady 仅表示找到官方中文资源；安装状态请看 localizationReady，界面中文仍需打开窗口确认。'
+    if ($Report.localizationReady) { Write-Ok '安装准备检查通过；尚未验证窗口是否显示中文。' }
     if ($Report.translationGatePresent) { Write-WarnLine '官方主界面受翻译加载开关控制，仅写语言配置可能无效。' }
     if ($Report.compatibleCopy -and $Report.compatibleCopyCurrent -and
         $Report.compatibleCopyPatched -and $Report.compatibleCopyLauncherReady) {
@@ -849,6 +869,7 @@ function Invoke-Install {
         New-Item -ItemType Directory -Path $toolStateRoot -Force | Out-Null
     }
     $state = [pscustomobject]@{
+        toolVersion = $toolVersion
         installedAt = (Get-Date).ToString('o')
         codexVersion = $codex.Version
         mode = if ($useCopy) { 'compatible-copy' } else { 'built-in-locale' }
@@ -864,10 +885,12 @@ function Invoke-Install {
         Start-Codex $launchInfo
         Write-Ok '已确认目标 Codex 进程启动；请检查窗口是否显示中文'
     } else {
-        Write-InfoLine '已跳过自动重启；下次启动 Codex 时生效。'
+        Write-InfoLine '[5/5] 已按要求跳过启动，当前 Codex 窗口会保留。'
+        if ($useCopy) { Write-InfoLine '请先保存当前任务，再手动退出官方 Codex，使用“Codex 中文版”打开并确认界面。' }
+        else { Write-InfoLine '请先保存当前任务，再手动重启 Codex 并确认界面。' }
     }
     Write-Host ''
-    if ($useCopy -and -not $NoRestart) { Write-Host '  汉化完成，已启动 Codex 中文版。以后请使用桌面或开始菜单中的“Codex 中文版”。' -ForegroundColor Green }
+    if ($useCopy -and -not $NoRestart) { Write-Host '  安装准备完成，已启动 Codex 中文版；界面中文仍待确认。以后请使用桌面或开始菜单中的“Codex 中文版”。' -ForegroundColor Green }
     elseif ($useCopy) { Write-Host '  中文兼容版已准备好。已按要求跳过启动；请使用“Codex 中文版”图标。' -ForegroundColor Green }
     else { Write-Host '  语言配置已保存。请重启后检查界面；若仍是英文，请使用默认兼容模式。' -ForegroundColor Yellow }
 }
@@ -876,8 +899,13 @@ function Invoke-RepairLauncher {
     Write-Title
     $copy = Get-ActiveCompatibilityCopy
     if (-not $copy) { throw '没有找到有效的中文兼容副本，请先运行一键安装。' }
+    $status = Get-StatusReport
+    if (-not $status.compatibleCopyCurrent -or -not $status.compatibleCopyPatched) {
+        throw '中文副本已过期、损坏或无法核对来源，不能仅修复启动器。请重新运行一键安装；旧副本和备份会保留。'
+    }
     Publish-CompatibilityLauncher $copy
     Write-Ok '启动器和中文快捷方式已修复。'
+    Write-InfoLine '此操作只修复启动入口，不重新复制程序或修改翻译；请打开窗口确认是否显示中文。'
     Write-Host '  请使用桌面或开始菜单中的“Codex 中文版”打开；已打开的任务会保留。' -ForegroundColor Green
 }
 

@@ -73,12 +73,19 @@ try {
         Set-TestLegacyPaths $true
     }
     $originalHash = (Get-FileHash -LiteralPath $asar).Hash
-    Invoke-Install
+    $beforeInstall = Get-StatusReport
+    Assert ($beforeInstall.ready -and $beforeInstall.resourcesReady -and -not $beforeInstall.localizationReady) 'Finding resources must not imply installation readiness'
+    Assert ($beforeInstall.nextAction -eq 'run-installer' -and -not $beforeInstall.uiLanguageVerified) 'Uninstalled resource-ready app must require installation and UI verification'
+    $prepared = Invoke-Install 6>&1 | Out-String
+    Assert ($prepared.Contains('[5/5]') -and $prepared.Contains('当前 Codex 窗口会保留')) 'NoRestart must explicitly complete step five without starting Codex'
     $active = Get-ActiveCompatibilityCopy
     Assert ($null -ne $active) 'Default install must publish a compatibility copy'
     Assert ((Get-DesktopLocale) -eq 'zh-CN') 'Default workflow must persist locale'
     $status = Get-StatusReport
     Assert ($status.localizationReady -and $status.compatibleCopyCurrent -and $status.compatibleCopyPatched) 'Status must verify current patched copy'
+    Assert ($status.toolVersion -eq $toolVersion -and $status.readyMeaning -eq 'official-chinese-resources-found-only') 'Status must identify tool version and legacy readiness meaning'
+    Assert (-not $status.uiLanguageVerified -and $status.uiVerificationStatus -eq 'pending-user-check' -and
+        $status.nextAction -eq 'open-chinese-shortcut-and-check-ui') 'Prepared copy must remain pending visual acceptance'
     $originalSource = [IO.File]::ReadAllBytes($asar)
     try {
         # Same installation path, new contents: path-only checks used to miss this.
@@ -87,8 +94,31 @@ try {
         try { $stream.WriteByte(0) } finally { $stream.Dispose() }
         $status = Get-StatusReport
         Assert ($status.compatibleCopySourceChanged -and -not $status.localizationReady) 'Status must detect in-place app update'
+        Assert ($status.nextAction -eq 'reinstall-compatible-copy') 'Stale copy must recommend reinstallation'
+        $recordPath = Join-Path $toolStateRoot 'active-copy.json'
+        $beforeRepairRecord = [IO.File]::ReadAllText($recordPath)
+        $blockedRepair = $false
+        try { Invoke-RepairLauncher 6>&1 | Out-Null } catch { $blockedRepair = $_.Exception.Message -like '*不能仅修复启动器*' }
+        Assert $blockedRepair 'Launcher repair must refuse an outdated copy'
+        Assert ([IO.File]::ReadAllText($recordPath) -ceq $beforeRepairRecord) 'Refused repair must not republish an outdated active record'
+
     } finally { [IO.File]::WriteAllBytes($asar, $originalSource); if ($LegacyLongPaths) { [IO.File]::SetAttributes($asar, [IO.FileAttributes]::ReadOnly) } }
     Assert ((Get-FileHash -LiteralPath $asar).Hash -eq $originalHash) 'Source must remain unchanged'
+    # A corrupted copy is not fixed by rewriting a shortcut; preserve the existing record.
+    $copyAsar = Join-Path $active.AppDirectory 'resources\app.asar'
+    $originalCopyBytes = [IO.File]::ReadAllBytes($copyAsar)
+    try {
+        $stream = [IO.File]::Open($copyAsar, [IO.FileMode]::Append)
+        try { $stream.WriteByte(0) } finally { $stream.Dispose() }
+        $damagedStatus = Get-StatusReport
+        Assert ($damagedStatus.ready -and -not $damagedStatus.localizationReady -and
+            $damagedStatus.nextAction -eq 'reinstall-compatible-copy') 'Resource-ready must not hide a corrupted active copy'
+        $blockedRepair = $false
+        try { Invoke-RepairLauncher 6>&1 | Out-Null } catch { $blockedRepair = $_.Exception.Message -like '*不能仅修复启动器*' }
+        Assert $blockedRepair 'Launcher repair must refuse a damaged copy'
+        Assert ([IO.File]::ReadAllText($recordPath) -ceq $beforeRepairRecord) 'Refused repair must preserve the active record'
+    } finally { [IO.File]::WriteAllBytes($copyAsar, $originalCopyBytes) }
+
     Assert (-not (Get-LocaleCompatibility $active.AppDirectory).Gated) 'Copy must bypass the translation gate'
     if ($LegacyLongPaths) {
         Set-TestLegacyPaths $false
@@ -121,6 +151,8 @@ try {
     Assert ((Get-ActiveCompatibilityCopy).AppDirectory -eq $firstPath) 'Repeated installation must reuse a verified copy'
     $persistentLauncher = Join-Path $toolStateRoot 'launcher\start-zh.ps1'
     [IO.File]::WriteAllText($persistentLauncher, '# old launcher')
+    $oldLauncherStatus = Get-StatusReport
+    Assert (-not $oldLauncherStatus.localizationReady -and $oldLauncherStatus.nextAction -eq 'repair-launcher') 'Outdated launcher must require repair without recopying valid resources'
     $beforeRepairHash = (Get-FileHash -LiteralPath (Join-Path $active.AppDirectory 'resources\app.asar')).Hash
     function Stop-Codex { throw 'Repair must not stop an application' }
     function Start-Codex { throw 'Repair must not restart an application' }
@@ -136,7 +168,7 @@ try {
     $NoRestart = $false
     $completed = Invoke-Install 6>&1 | Out-String
     Assert ($script:launchedExe -eq (Get-ActiveCompatibilityCopy).Executable) 'Automatic branch must launch the compatible copy'
-    Assert ($completed.Contains('汉化完成，已启动 Codex 中文版')) 'Only successful startup should report completion'
+    Assert ($completed.Contains('安装准备完成，已启动 Codex 中文版；界面中文仍待确认')) 'Successful startup must still require UI acceptance'
     function Start-Codex($CodexInfo) { throw 'EXPECTED_START_FAILURE' }
     $failed = $false
     try { Invoke-Install 6>&1 | Out-Null } catch { $failed = $_.Exception.Message -eq 'EXPECTED_START_FAILURE' }
