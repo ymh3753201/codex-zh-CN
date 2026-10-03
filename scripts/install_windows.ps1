@@ -784,6 +784,9 @@ function Show-Status($Report) {
         $Report.compatibleCopyPatched -and $Report.compatibleCopyLauncherReady) {
         Write-Ok "中文兼容版检查通过：$($Report.compatibleCopy)"
         Write-InfoLine '请从桌面或开始菜单的“Codex 中文版”启动；官方 Codex 图标不会加载兼容补丁。'
+    } elseif ($Report.compatibleCopy -and $Report.compatibleCopyCurrent -and $Report.compatibleCopyPatched) {
+        Write-WarnLine '中文副本文件检查通过，但启动器缺失或内容已变化。请运行“修复启动”，无需重新复制程序。'
+        if ($Report.compatibleCopyError) { Write-WarnLine "启动器检查原因：$($Report.compatibleCopyError)" }
     } elseif ($Report.compatibleCopy) {
         Write-WarnLine '现有中文兼容版已过期或不完整，请重新运行一键安装。'
         if ($Report.compatibleCopyError) { Write-WarnLine "副本检查原因：$($Report.compatibleCopyError)" }

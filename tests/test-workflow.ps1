@@ -153,6 +153,8 @@ try {
     [IO.File]::WriteAllText($persistentLauncher, '# old launcher')
     $oldLauncherStatus = Get-StatusReport
     Assert (-not $oldLauncherStatus.localizationReady -and $oldLauncherStatus.nextAction -eq 'repair-launcher') 'Outdated launcher must require repair without recopying valid resources'
+    $launcherNotice = Show-Status $oldLauncherStatus 6>&1 | Out-String
+    Assert ($launcherNotice.Contains('请运行“修复启动”，无需重新复制程序')) 'Human status must distinguish launcher-only repair from reinstallation'
     $beforeRepairHash = (Get-FileHash -LiteralPath (Join-Path $active.AppDirectory 'resources\app.asar')).Hash
     function Stop-Codex { throw 'Repair must not stop an application' }
     function Start-Codex { throw 'Repair must not restart an application' }
