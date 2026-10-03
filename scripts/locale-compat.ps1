@@ -8,6 +8,34 @@ function Test-PathWithin([string]$Path, [string]$Root) {
         $fullPath.StartsWith($rootPath + '\', [StringComparison]::OrdinalIgnoreCase)
 }
 
+function Get-LegacyCompatibilityRoots {
+    # v0.1/v0.2 used this writable copy outside the current zh-cn-tool state
+    # directory. Keep it out of discovery so a failed old install cannot be
+    # selected as the source for a new installation.
+    return @(
+        (Join-Path $CodexHome 'zh-cn-patched'),
+        (Join-Path $CodexHome 'zh-cn-patched\app')
+    )
+}
+
+function Test-IsLegacyCompatibilityPath([string]$Path) {
+    foreach ($root in (Get-LegacyCompatibilityRoots)) {
+        if (Test-PathWithin $Path $root) { return $true }
+    }
+    return $false
+}
+
+function Get-AsarFileEntries($Node, [string]$Prefix = '') {
+    foreach ($property in @($Node.files.PSObject.Properties)) {
+        $path = if ($Prefix) { "$Prefix/$($property.Name)" } else { $property.Name }
+        if ($property.Value.files) {
+            Get-AsarFileEntries $property.Value $path
+        } else {
+            [pscustomobject]@{ Path = $path; Name = $property.Name; Entry = $property.Value }
+        }
+    }
+}
+
 function Get-TomlStructuralLines([string[]]$Lines) {
     # Preserve line indexes while masking multiline string contents. A heading
     # inside instructions must never be mistaken for the real [desktop] table.
@@ -49,11 +77,39 @@ function Get-TomlStructuralLines([string[]]$Lines) {
 function Get-ActiveCompatibilityCopy {
     $recordPath = Join-Path $toolStateRoot 'active-copy.json'
     if (-not (Test-Path -LiteralPath $recordPath)) { return $null }
-    $record = Get-Content -LiteralPath $recordPath -Raw -Encoding UTF8 | ConvertFrom-Json
-    if (-not (Test-PathWithin $record.AppDirectory (Join-Path $toolStateRoot 'copies')) -or
-        -not (Test-PathWithin $record.Executable $record.AppDirectory)) { throw '中文副本记录路径异常' }
+    try {
+        $record = Get-Content -LiteralPath $recordPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        if (-not (Test-PathWithin $record.AppDirectory (Join-Path $toolStateRoot 'copies')) -or
+            -not (Test-PathWithin $record.Executable $record.AppDirectory)) { throw '路径不在受保护的副本目录中' }
+    } catch {
+        # Old releases could leave a truncated or incompatible record after a
+        # failed copy. Ignore it for a fresh install; Publish-Compatibility-
+        # Launcher will atomically replace it after the new copy is verified.
+        Write-WarnLine "发现旧版或损坏的中文副本记录，安装时将重新创建：$recordPath"
+        return $null
+    }
     if (-not (Test-Path -LiteralPath $record.Executable)) { return $null }
     return $record
+}
+
+function Get-DirectorySize([string]$Path) {
+    $total = 0L
+    foreach ($file in [IO.Directory]::EnumerateFiles($Path, '*', [IO.SearchOption]::AllDirectories)) {
+        try { $total += ([IO.FileInfo]::new($file)).Length } catch {}
+    }
+    return $total
+}
+
+function Assert-CopySpace([string]$SourceDirectory, [string]$TargetRoot) {
+    # Fail before robocopy starts, with a message ordinary users can act on.
+    try {
+        $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot([IO.Path]::GetFullPath($TargetRoot)))
+        $free = $drive.AvailableFreeSpace
+        $needed = [long]((Get-DirectorySize $SourceDirectory) * 1.1) + 200MB
+    } catch { return } # Unknown size or network drive: let robocopy report errors.
+    if ($free -lt $needed) {
+        throw ('磁盘空间不足：中文副本约需 {0:N1} GB，{1} 仅剩 {2:N1} GB。请清理磁盘后重试。' -f ($needed / 1GB), $drive.Name, ($free / 1GB))
+    }
 }
 
 function New-CompatibilityCopy($Source) {
@@ -62,12 +118,17 @@ function New-CompatibilityCopy($Source) {
     $previous = Get-ActiveCompatibilityCopy
     if ($previous -and $previous.SourceHash -eq $sourceHash -and $previous.ToolVersion -eq $toolVersion -and
         $previous.SourceDirectory -eq $Source.AppDirectory) {
-        if ((Get-FileHash -LiteralPath (Join-Path $previous.AppDirectory 'resources\app.asar')).Hash -eq $previous.PatchedHash -and
-            (Get-FileHash -LiteralPath $previous.Executable).Hash -eq $previous.ExecutableHash) { return $previous }
+        try {
+            if ((Get-FileHash -LiteralPath (Join-Path $previous.AppDirectory 'resources\app.asar')).Hash -eq $previous.PatchedHash -and
+                (Get-FileHash -LiteralPath $previous.Executable).Hash -eq $previous.ExecutableHash) { return $previous }
+        } catch {
+            Write-WarnLine '旧中文副本的文件缺失或无法读取，将重新准备副本。旧副本和备份会保留。'
+        }
     }
     $copiesRoot = Join-Path $toolStateRoot 'copies'
     if (Test-PathWithin $toolStateRoot $Source.AppDirectory) { throw '工具数据目录不能位于 Codex 程序目录中。' }
     [void][IO.Directory]::CreateDirectory($copiesRoot)
+    Assert-CopySpace $Source.AppDirectory $copiesRoot
     $copyPath = Join-Path $copiesRoot ([guid]::NewGuid().ToString('N'))
     [void][IO.Directory]::CreateDirectory($copyPath)
     $copyLog = Join-Path $toolStateRoot ('copy-' + (Split-Path -Leaf $copyPath) + '.log')
@@ -120,22 +181,98 @@ function Publish-CompatibilityLauncher($Copy) {
     $runtime = Join-Path $toolStateRoot 'launcher'
     [void][IO.Directory]::CreateDirectory($runtime)
     Copy-Item -LiteralPath (Join-Path $scriptDir 'start-zh.ps1') -Destination (Join-Path $runtime 'start-zh.ps1') -Force
-    $shell = New-Object -ComObject WScript.Shell
     $shortcuts = @()
     foreach ($folder in (Get-ShortcutFolders)) {
         if ([string]::IsNullOrWhiteSpace($folder)) { continue }
         [void][IO.Directory]::CreateDirectory($folder)
-        $shortcutPath = Join-Path $folder 'Codex 中文版.lnk'
-        $shortcut = $shell.CreateShortcut($shortcutPath)
-        $shortcut.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
-        $shortcut.Arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $runtime 'start-zh.ps1') + '"'
-        $shortcut.WorkingDirectory = $toolStateRoot
-        $shortcut.IconLocation = $Copy.Executable + ',0'
-        $shortcut.Description = 'Codex 中文兼容版；官方更新后请重新运行汉化工具'
-        $shortcut.Save()
+        $shortcutPath = Join-Path $folder (Get-ShortcutName)
+        Save-UnicodeShortcut $shortcutPath @{
+            TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+            Arguments = '-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + (Join-Path $runtime 'start-zh.ps1') + '"'
+            WorkingDirectory = $toolStateRoot
+            IconLocation = $Copy.Executable + ',0'
+            Description = 'Codex 中文兼容版；官方更新后请重新运行汉化工具'
+        }
         $shortcuts += $shortcutPath
     }
     Write-TextFile (Join-Path $toolStateRoot 'shortcuts.json') (ConvertTo-Json -InputObject @($shortcuts))
+}
+
+function Get-ShortcutName {
+    # Built from code points so the name survives any console or file encoding.
+    return 'Codex ' + [string][char]0x4E2D + [char]0x6587 + [char]0x7248 + '.lnk'
+}
+
+function Initialize-ShellLinkType {
+    # WScript.Shell stores shortcut strings through the ANSI code page, so Chinese
+    # user names or paths turn into "?" on English Windows. IShellLinkW is Unicode.
+    if ('CodexZh.ShellLink' -as [type]) { return }
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+using System.Text;
+namespace CodexZh {
+    [ComImport, Guid("00021401-0000-0000-C000-000000000046")] class CShellLink {}
+    [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("000214F9-0000-0000-C000-000000000046")]
+    interface IShellLinkW {
+        void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder f, int cch, IntPtr pfd, int flags);
+        void GetIDList(out IntPtr ppidl);
+        void SetIDList(IntPtr pidl);
+        void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder s, int cch);
+        void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string s);
+        void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder s, int cch);
+        void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string s);
+        void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder s, int cch);
+        void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string s);
+        void GetHotkey(out short h);
+        void SetHotkey(short h);
+        void GetShowCmd(out int c);
+        void SetShowCmd(int c);
+        void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder s, int cch, out int i);
+        void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string s, int i);
+        void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string s, int r);
+        void Resolve(IntPtr hwnd, int flags);
+        void SetPath([MarshalAs(UnmanagedType.LPWStr)] string s);
+    }
+    public static class ShellLink {
+        public static void Save(string path, string target, string arguments, string workingDirectory, string icon, int iconIndex, string description) {
+            var link = (IShellLinkW)new CShellLink();
+            try {
+                link.SetPath(target);
+                link.SetArguments(arguments);
+                link.SetWorkingDirectory(workingDirectory);
+                link.SetIconLocation(icon, iconIndex);
+                link.SetDescription(description);
+                ((IPersistFile)link).Save(path, true);
+            } finally { Marshal.FinalReleaseComObject(link); }
+        }
+        public static string ReadArguments(string path) {
+            var link = (IShellLinkW)new CShellLink();
+            try {
+                ((IPersistFile)link).Load(path, 0);
+                var sb = new StringBuilder(32768);
+                link.GetArguments(sb, sb.Capacity);
+                return sb.ToString();
+            } finally { Marshal.FinalReleaseComObject(link); }
+        }
+    }
+}
+'@
+}
+
+function Save-UnicodeShortcut([string]$Path, [hashtable]$Properties) {
+    Initialize-ShellLinkType
+    $icon = [string]$Properties.IconLocation
+    $index = 0
+    if ($icon -match '^(.*),(-?\d+)$') { $icon = $Matches[1]; $index = [int]$Matches[2] }
+    [CodexZh.ShellLink]::Save($Path, $Properties.TargetPath, $Properties.Arguments,
+        $Properties.WorkingDirectory, $icon, $index, $Properties.Description)
+    if (-not [IO.File]::Exists($Path)) { throw "快捷方式创建失败：$Path" }
+}
+
+function Read-UnicodeShortcutArguments([string]$Path) {
+    try { Initialize-ShellLinkType; return [CodexZh.ShellLink]::ReadArguments($Path) } catch { return '' }
 }
 
 function Get-ShortcutFolders {
@@ -145,11 +282,10 @@ function Get-ShortcutFolders {
 function Remove-CompatibilityLauncher {
     foreach ($folder in (Get-ShortcutFolders)) {
         if ([string]::IsNullOrWhiteSpace($folder)) { continue }
-        $path = Join-Path $folder 'Codex 中文版.lnk'
+        $path = Join-Path $folder (Get-ShortcutName)
         if (Test-Path -LiteralPath $path) {
-            $shell = New-Object -ComObject WScript.Shell
-            $shortcut = $shell.CreateShortcut($path)
-            if ($shortcut.Arguments.Contains((Join-Path $toolStateRoot 'launcher\start-zh.ps1'))) { Remove-Item -LiteralPath $path -Force }
+            $arguments = Read-UnicodeShortcutArguments $path
+            if ($arguments -and $arguments.Contains((Join-Path $toolStateRoot 'launcher\start-zh.ps1'))) { Remove-Item -LiteralPath $path -Force }
         }
     }
     $record = Join-Path $toolStateRoot 'active-copy.json'
@@ -187,23 +323,25 @@ function Read-AsarText([string]$Path, $Index, $Entry) {
 
 function Get-LocaleGatePattern {
     # Handles the optional layer and the direct layer call used by settings.
-    return '[A-Za-z_$][\w$]*(?:\(`72216192`\))?\?\.get\(`enable_i18n`,![01]\)'
+    # The Statsig layer id is not part of the contract: new releases may rename it.
+    return '[A-Za-z_$][\w$]*(?:\(`\d{4,}`\))?\?\.get\(`enable_i18n`,![01]\)'
 }
 
 function Get-LocaleCompatibility([string]$AppDirectory) {
     $path = Join-Path $AppDirectory 'resources\app.asar'
     $index = Read-AsarIndex $path
-    $assets = $index.Tree.files.webview.files.assets.files
+    $entries = @(Get-AsarFileEntries $index.Tree)
     $targets = @()
-    foreach ($property in $assets.PSObject.Properties) {
-        if ($property.Name -notmatch '^(app-initial|index|general-settings)-.*\.js$') { continue }
-        $content = Read-AsarText $path $index $property.Value
+    foreach ($file in $entries) {
+        if ($file.Path -notmatch '(?i)^webview/assets/(app-initial|index|general-settings)-.*\.js$') { continue }
+        $content = Read-AsarText $path $index $file.Entry
         if ($content.Contains('enable_i18n')) {
-            $matches = [regex]::Matches($content, (Get-LocaleGatePattern))
-            if ($matches.Count -ne 1 -or -not $content.Contains('localeOverride') -or -not $content.Contains('72216192')) {
-                throw "语言加载逻辑已变化，不能安全修复：$($property.Name)"
+            $gateMatches = [regex]::Matches($content, (Get-LocaleGatePattern))
+            if ($gateMatches.Count -ne 1 -or -not $content.Contains('localeOverride') -or
+                [regex]::Matches($content, 'enable_i18n').Count -ne 1) {
+                throw "语言加载逻辑已变化，不能安全修复：$($file.Name)"
             }
-            $targets += [pscustomobject]@{ Name = $property.Name; Entry = $property.Value; Content = $content }
+            $targets += [pscustomobject]@{ Name = $file.Name; Entry = $file.Entry; Content = $content }
         }
     }
     if ($targets.Count -gt 0 -and @($targets | Where-Object { $_.Name -match '^(app-initial|index)-' }).Count -eq 0) {

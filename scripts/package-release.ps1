@@ -36,6 +36,7 @@ $files = @(
     'RELEASE_NOTES_v0.3.1.md',
     'RELEASE_NOTES_v0.3.2.md',
     'RELEASE_NOTES_v0.3.3.md',
+    'RELEASE_NOTES_v0.3.4.md',
     'resources\release.json',
     'resources\bundled-plugins-zh-CN.json',
     'scripts\install_windows.ps1',
@@ -44,7 +45,8 @@ $files = @(
     'scripts\locale-compat.ps1',
     'scripts\console-mode.ps1',
     'scripts\start-zh.ps1',
-    'docs\diagnosis-v0.3.0.md'
+    'docs\diagnosis-v0.3.0.md',
+    'docs\student-report-review-2026-10-03.md'
 )
 
 if (Test-Path -LiteralPath $stageRoot) {

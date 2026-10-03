@@ -19,7 +19,25 @@ try {
     function Set-LocaleCompatibility { return 1 }
     $source=[pscustomobject]@{AppDirectory=$app;Version='fixture'}
     $original=(Get-FileHash -LiteralPath $asar).Hash
+    # A previous release can leave a truncated active record after a crash.
+    # A new verified copy must recover instead of stopping at the stale JSON.
+    [void][IO.Directory]::CreateDirectory($toolStateRoot)
+    [IO.File]::WriteAllText((Join-Path $toolStateRoot 'active-copy.json'), '{"truncated":')
+    $recovered = New-CompatibilityCopy $source
+    Assert ($null -ne $recovered -and (Test-Path -LiteralPath $recovered.Executable)) 'Corrupt old active record must be recoverable'
+    Remove-Item -LiteralPath (Join-Path $toolStateRoot 'active-copy.json') -Force
     $active=New-CompatibilityCopy $source
+    # Valid JSON with a missing archive must recover, retaining the old record until publication.
+    Write-TextFile (Join-Path $toolStateRoot 'active-copy.json') ($active | ConvertTo-Json)
+    $damagedRecord = [IO.File]::ReadAllText((Join-Path $toolStateRoot 'active-copy.json'))
+    Remove-Item -LiteralPath (Join-Path $active.AppDirectory 'resources\app.asar') -Force
+    $replacement = New-CompatibilityCopy $source
+    Assert ($replacement.AppDirectory -ne $active.AppDirectory) 'Missing old archive must create a new verified copy'
+    Assert ((Get-FileHash -LiteralPath (Join-Path $replacement.AppDirectory 'resources\app.asar')).Hash -eq $original) 'Replacement archive must match the source'
+    Assert (Test-Path -LiteralPath $active.Executable) 'Recovery must retain the old copy'
+    Assert ([IO.File]::ReadAllText((Join-Path $toolStateRoot 'active-copy.json')) -ceq $damagedRecord) 'Recovery must not publish a copy before the launcher stage'
+    $active = $replacement
+    Write-Host '[PASS] missing old archive: fresh verified copy, old files and record retained'
     $active.ToolVersion='previous-version-fixture'
     Write-TextFile (Join-Path $toolStateRoot 'active-copy.json') ($active | ConvertTo-Json)
     $previousRecord=[IO.File]::ReadAllText((Join-Path $toolStateRoot 'active-copy.json'))

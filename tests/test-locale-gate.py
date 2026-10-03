@@ -4,6 +4,7 @@ No app launch or user config changes. Python/Node are developer dependencies onl
 """
 import hashlib
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -38,51 +39,62 @@ def renderer_check(content, expect_chinese):
     start = content.rfind('function ', 0, marker)
     end = content.index('function ', marker)
     component = content[start:end]
-    name = re.match(r'function (\w+)', component)[1]
-    cache = re.search(r'\(0,(\w+)\.c\)', component)[1]
-    react = re.search(r'\(0,(\w+)\.useState\)', component)[1]
-    jsx = re.search(r'\(0,(\w+)\.jsx\)', component)[1]
-    # Minified names change between releases. Keep audited bindings per actual
-    # component, and fail explicitly when a new structure needs review.
-    if name == 'VJo':
-        bindings = '''
-const Q={}, IJo={}, N6t={}, Twe={}, KJo='en-US';
-const gm=()=>({}), fm=()=>({data:{ideLocale:'en-US',systemLocale:'en-US'}});
-const Aon=()=>({get:(key,fallback)=>key==='enable_i18n'?false:fallback});
-const $0=x=>!x||x==='en-US', Q0=x=>x, RJo=x=>x, I4a=x=>({locale:x});
-const L4a=async()=>({greeting:'你好'}), Vy=()=>{}, vH=()=> 'ltr', HJo=()=>{};
-const s={error:()=>{}};
-'''
-    elif name == 'zFs':
-        bindings = '''
-const Q={}, PFs={}, _On={}, yve={}, WFs='en-US';
-const nm=()=>({}), Zp=()=>({data:{ideLocale:'en-US',systemLocale:'en-US'}});
-const DIn=()=>({get:(key,fallback)=>key==='enable_i18n'?false:fallback});
-const w6=x=>!x||x==='en-US', C6=x=>x, IFs=x=>x, V2o=x=>({locale:x});
-const H2o=async()=>({greeting:'你好'}), NS=()=>{}, eW=()=> 'ltr', BFs=()=>{};
-const l={error:()=>{}};
-'''
-    else:
-        raise AssertionError(f'Unaudited renderer component: {name}')
+    name = re.match(r'function ([\w$]+)', component)[1]
+    # Minified names change on every Codex release. Derive each binding's role
+    # from the component's structure; fail loudly if a role cannot be found.
+    def role(pattern, label):
+        found = re.search(pattern, component)
+        if not found:
+            raise AssertionError(f'Renderer structure changed ({label}); review before patching: {name}')
+        return found[1]
+    override = role(r'localeOverride:([\w$]+)\}=e', 'localeOverride prop')
+    roles = {
+        'cache': role(r'\(0,([\w$]+)\.c\)', 'memo cache'),
+        'react': role(r'\(0,([\w$]+)\.useState\)', 'react'),
+        'jsx': role(r'\(0,([\w$]+)\.jsx\)', 'jsx runtime'),
+        'flag': role(r'([\w$]+)\(`\d{4,}`\)', 'feature layer hook'),
+        'data': role(r'\{data:[\w$]+\}=([\w$]+)\(', 'locale data hook'),
+        'isDefault': role(r'[\w$]+=([\w$]+)\(' + re.escape(override) + r'\)', 'default-locale check'),
+        'resolve': role(r'try\{let e;[^;{}]*?e=([\w$]+)\(', 'locale resolver'),
+        'load': role(r'await ([\w$]+)\(', 'message loader'),
+    }
     js = f'''
 const assert = require('node:assert/strict');
 let current = null, effects = [];
-const {cache} = {{c: n => Array(n).fill(Symbol('empty'))}};
-const {react} = {{useState: () => [current, v => current = v], useEffect: f => effects.push(f)}};
-const {jsx} = {{jsx: (type, props) => props}};
-{bindings}
-const document={{documentElement:{{}}}};
-{component}
+const stub = new Proxy(function(x){{ return x; }}, {{ get: (t, k) => k === Symbol.toPrimitive ? undefined : stub }});
+const roles = {{
+  {roles['cache']}: {{c: n => Array(n).fill(Symbol('empty'))}},
+  {roles['react']}: {{useState: () => [current, v => current = v], useEffect: f => effects.push(f)}},
+  {roles['jsx']}: {{jsx: (type, props) => props}},
+  {roles['flag']}: () => ({{get: (key, fallback) => key === 'enable_i18n' ? false : fallback}}),
+  {roles['data']}: () => ({{data: {{ideLocale: 'en-US', systemLocale: 'en-US'}}}}),
+  {roles['isDefault']}: x => !x || x === 'en-US',
+  {roles['resolve']}: x => ({{locale: x}}),
+  {roles['load']}: async () => ({{greeting: '你好'}}),
+  document: {{documentElement: {{}}}},
+}};
+const scope = new Proxy(roles, {{
+  has: (t, k) => typeof k === 'string' && k !== 'component' && (k in t || !(k in globalThis)),
+  get: (t, k) => k === Symbol.unscopables ? undefined : (k in t ? t[k] : stub),
+}});
+const component = (function() {{ with (scope) {{ return (function() {{ {component}; return {name}; }})(); }} }})();
 (async()=>{{
-  let result={name}({{localeOverride:'zh-CN',children:'test'}});
+  let result=component({{localeOverride:'zh-CN',children:'test'}});
   effects.forEach(f=>f()); await new Promise(resolve=>setImmediate(resolve));
-  result={name}({{localeOverride:'zh-CN',children:'test'}});
+  result=component({{localeOverride:'zh-CN',children:'test'}});
   assert.equal(result.locale,'zh-CN');
   assert.equal(result.messages?.greeting==='你好', {str(expect_chinese).lower()});
-  console.log('PASS: production renderer, remote switch false, Chinese loaded =', {str(expect_chinese).lower()});
+  console.log('PASS: production renderer ({name}), remote switch false, Chinese loaded =', {str(expect_chinese).lower()});
 }})().catch(e=>{{console.error(e);process.exitCode=1}});
 '''
-    subprocess.run(['node', '-e', js], check=True)
+    # Run as a sloppy-mode CommonJS file: the harness relies on `with` to
+    # supply every free minified binding the component references.
+    with tempfile.NamedTemporaryFile('w', suffix='.cjs', delete=False, encoding='utf-8') as script:
+        script.write(js)
+    try:
+        subprocess.run(['node', script.name], check=True)
+    finally:
+        os.unlink(script.name)
 
 
 def main():
@@ -106,7 +118,7 @@ def main():
         old_hash = hashlib.sha256(raw).hexdigest()
         exe.write_bytes(b'MZ' + ('{"file":"resources\\\\app.asar","alg":"SHA256","value":"' + old_hash + '"}').encode())
         command = "$ErrorActionPreference='Stop'; . '" + str(ROOT / 'scripts/locale-compat.ps1').replace("'", "''") + "'; Set-LocaleCompatibility '" + str(app).replace("'", "''") + "'"
-        subprocess.run(['powershell.exe', '-NoProfile', '-Command', command], check=True)
+        subprocess.run([os.environ.get('CODEX_ZH_PWSH', 'powershell.exe'), '-NoProfile', '-Command', command], check=True)
         new_base, new_header = read_asar(dest)
         new_assets = new_header['files']['webview']['files']['assets']['files']
         patched = entry_bytes(dest, new_base, new_assets[name]).decode()

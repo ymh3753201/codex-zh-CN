@@ -1,0 +1,69 @@
+name: E2E Windows
+
+# 用真实 Codex MSIX 在两代 Windows 上完整跑一遍：安装 → 汉化 → 启动 → 读取界面语言 → 恢复。
+# windows-2022 = Windows Server 2022（与 Windows 10 21H2 同代内核，构建 20348）
+# windows-2025 = Windows Server 2025（与 Windows 11 24H2 同代内核，构建 26100）
+# 安装包地址来自手动输入或仓库变量 CODEX_MSIX_URL（建议放在私有存储，不要公开分发）。
+on:
+  workflow_dispatch:
+    inputs:
+      msix_url:
+        description: 'Codex MSIX 下载地址（留空则使用仓库变量 CODEX_MSIX_URL）'
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    name: 真实汉化 ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, windows-2025]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    env:
+      MSIX_URL: ${{ inputs.msix_url || vars.CODEX_MSIX_URL }}
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+
+      - name: 下载 Codex MSIX
+        shell: powershell
+        run: |
+          if (-not $env:MSIX_URL) { throw '请提供 msix_url 输入或设置仓库变量 CODEX_MSIX_URL' }
+          $ProgressPreference = 'SilentlyContinue'
+          Invoke-WebRequest -Uri $env:MSIX_URL -OutFile "$env:RUNNER_TEMP\codex.msix"
+          $sig = Get-AuthenticodeSignature "$env:RUNNER_TEMP\codex.msix"
+          Write-Host "Signature: $($sig.Status) $($sig.SignerCertificate.Subject)"
+          (Get-Item "$env:RUNNER_TEMP\codex.msix").Length
+
+      - name: 离线审计真实 app.asar
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [IO.Compression.ZipFile]::OpenRead("$env:RUNNER_TEMP\codex.msix")
+          try {
+            $entry = $zip.Entries | Where-Object FullName -eq 'app/resources/app.asar'
+            [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, "$env:RUNNER_TEMP\app.asar", $true)
+          } finally { $zip.Dispose() }
+          node scripts/analyze-codex-asar.mjs "$env:RUNNER_TEMP\app.asar" | Select-Object -First 12
+          python tests/test-locale-gate.py "$env:RUNNER_TEMP\app.asar"
+          if ($LASTEXITCODE -ne 0) { throw 'locale gate test failed' }
+
+      - name: 端到端汉化与界面语言检查
+        shell: powershell
+        run: .\tests\e2e\e2e-windows.ps1 -MsixPath "$env:RUNNER_TEMP\codex.msix" -OutDir "$env:RUNNER_TEMP\e2e"
+
+      - name: 上传截图与诊断
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ matrix.os }}
+          path: ${{ runner.temp }}/e2e/**
+          if-no-files-found: warn

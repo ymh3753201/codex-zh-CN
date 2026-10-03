@@ -1,3 +1,8 @@
 # 按仓库中的原始字节检出，避免不同平台自动转换换行。
 # 本项目的入口脚本互相比较文件哈希，换行被改写会导致校验失败。
 * -text
+
+# Windows 入口必须是 CRLF；cmd.exe 在 LF 文件中执行 goto/标签可能跳错行。
+*.bat -text whitespace=cr-at-eol
+*.vbs -text whitespace=cr-at-eol
+*.py -text whitespace=cr-at-eol
