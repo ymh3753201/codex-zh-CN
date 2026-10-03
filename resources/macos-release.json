@@ -1,0 +1,14 @@
+{
+  "release": "0.1.0-preview.1",
+  "strategy": "official-locale-setting",
+  "bundleIdentifier": "com.openai.codex",
+  "testedCodexVersion": "26.930.31730",
+  "testedBuildVersion": "12947",
+  "validation": {
+    "macOS": "26.6.2",
+    "appleSilicon": "Real installed app resource, signature, notarization, architecture and running-process checks passed on arm64; isolated config install, status and restore passed",
+    "intel": "Automated x86_64 decision path passed; real Intel Mac launch and visual acceptance pending",
+    "ui": "Chinese resource presence is verified, but menu and main-window Chinese still require human visual acceptance",
+    "windows": "Existing Windows workflow remains separate and must continue to pass on GitHub Actions"
+  }
+}
