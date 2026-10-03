@@ -6,3 +6,7 @@
 *.bat -text whitespace=cr-at-eol
 *.vbs -text whitespace=cr-at-eol
 *.py -text whitespace=cr-at-eol
+
+# macOS 双击入口和 Shell 脚本必须保持 LF 与可执行权限。
+*.sh text eol=lf
+*.command text eol=lf

@@ -143,3 +143,35 @@ jobs:
           name: ci-diagnostics
           path: diagnostics/**
           if-no-files-found: ignore
+
+  verify-macos:
+    name: macOS 安装、恢复与工具包验证
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 显示运行环境
+        run: |
+          sw_vers
+          uname -m
+          /bin/bash --version | head -n 1
+
+      - name: macOS 安装、升级、失败回滚和架构回归
+        run: /bin/bash tests/test-macos.sh
+
+      - name: 生成 macOS 工具包和 SHA-256
+        run: /bin/bash scripts/package-macos.sh
+
+      - name: 校验 macOS 工具包
+        run: /bin/bash tests/test-macos-release.sh
+
+      - name: 上传 macOS 工具包
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-zh-CN-macOS-preview
+          path: |
+            dist/codex-zh-CN-macOS-v*.zip
+            dist/codex-zh-CN-macOS-v*.sha256
+          if-no-files-found: error
