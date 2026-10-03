@@ -1,5 +1,5 @@
 {
-  "release": "0.1.0-preview.1",
+  "release": "0.1.0-preview.2",
   "strategy": "official-locale-setting",
   "bundleIdentifier": "com.openai.codex",
   "testedCodexVersion": "26.930.31730",

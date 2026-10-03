@@ -48,6 +48,8 @@ done
 [ -x "$PACKAGE_ROOT/scripts/install_macos.sh" ] || fail "安装脚本没有执行权限"
 [ -z "$(find "$PACKAGE_ROOT" -name '.DS_Store' -print -quit)" ] || fail "工具包包含 .DS_Store"
 /bin/bash -n "$PACKAGE_ROOT/scripts/install_macos.sh"
-/bin/bash "$PACKAGE_ROOT/scripts/install_macos.sh" --help >/dev/null
+HELP_ERROR="$OUTPUT_DIR/help-error.txt"
+/bin/bash "$PACKAGE_ROOT/scripts/install_macos.sh" --help >/dev/null 2> "$HELP_ERROR" || fail "帮助入口运行失败"
+[ ! -s "$HELP_ERROR" ] || fail "帮助入口输出了隐藏错误"
 
 printf '[PASS] macOS 发布包、源码哈希、执行权限和 SHA-256 校验通过\n'

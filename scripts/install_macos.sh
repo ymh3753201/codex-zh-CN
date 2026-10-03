@@ -5,7 +5,7 @@
 
 set -u
 
-TOOL_VERSION="0.1.0-preview.1"
+TOOL_VERSION="0.1.0-preview.2"
 BUNDLE_ID="com.openai.codex"
 EXPECTED_TEAM_ID="2DC432GLL2"
 ACTION="install"
@@ -47,9 +47,13 @@ REPORT_FILE=""
 CONFIG_PATH=""
 STATE_ROOT=""
 ACTIVE_STATE_PATH=""
-TEMP_PATHS=""
+TEMP_PATHS=("")
 LAST_BACKUP_PATH=""
 LAST_CONFIG_ORIGINAL=0
+LAST_STATE_BACKUP_PATH=""
+LAST_STATE_ORIGINAL=0
+TRANSACTION_ACTIVE=0
+REPORTING_READY=false
 
 usage() {
     cat <<'EOF'
@@ -88,16 +92,13 @@ ok() { log_line "成功" "$@"; }
 warn() { log_line "提醒" "$@"; }
 
 cleanup() {
-    old_ifs="$IFS"
-    IFS='|'
-    for path in $TEMP_PATHS; do
+    for path in "${TEMP_PATHS[@]}"; do
         if [ -n "$path" ] && [ -e "$path" ]; then rm -rf -- "$path" 2>/dev/null || true; fi
     done
-    IFS="$old_ifs"
 }
 
 remember_temp() {
-    if [ -z "$TEMP_PATHS" ]; then TEMP_PATHS="$1"; else TEMP_PATHS="$TEMP_PATHS|$1"; fi
+    TEMP_PATHS[${#TEMP_PATHS[@]}]="$1"
 }
 
 display_path() {
@@ -163,6 +164,21 @@ parse_args() {
     case "$ACTION" in install|status|open|restore) ;; *) printf '不支持的操作：%s\n' "$ACTION" >&2; exit 2 ;; esac
 }
 
+activate_fallback_reporting() {
+    fallback_parent="${TMPDIR:-/tmp}"
+    fallback_root="$(mktemp -d "$fallback_parent/codex-zh-macos-report.XXXXXX" 2>/dev/null)" || return 1
+    chmod 700 "$fallback_root" 2>/dev/null || true
+    STATE_ROOT="$fallback_root"
+    ACTIVE_STATE_PATH="$STATE_ROOT/active-state.json"
+    mkdir -p -- "$STATE_ROOT/logs" "$STATE_ROOT/diagnostics" || return 1
+    stamp="$(date '+%Y%m%d-%H%M%S')-$$"
+    LOG_FILE="$STATE_ROOT/logs/$ACTION-$stamp.log"
+    REPORT_FILE="$STATE_ROOT/diagnostics/report-$stamp.json"
+    : > "$LOG_FILE" || return 1
+    REPORTING_READY=true
+    return 0
+}
+
 init_paths() {
     if [ -n "$CODEX_HOME_OVERRIDE" ]; then
         CODEX_HOME="$CODEX_HOME_OVERRIDE"
@@ -176,14 +192,31 @@ init_paths() {
         STATE_ROOT="$CODEX_HOME/zh-cn-tool/macos"
     fi
     ACTIVE_STATE_PATH="$STATE_ROOT/active-state.json"
-    mkdir -p -- "$STATE_ROOT/logs" "$STATE_ROOT/diagnostics" "$STATE_ROOT/backups" 2>/dev/null || {
-        printf '无法创建工具状态目录：%s\n' "$STATE_ROOT" >&2
-        exit 1
-    }
+    requested_state_root="$STATE_ROOT"
+    if ! mkdir -p -- "$STATE_ROOT/logs" "$STATE_ROOT/diagnostics" "$STATE_ROOT/backups" 2>/dev/null; then
+        STAGE="init-state-directory"
+        FAILURE_MESSAGE="无法创建工具状态目录：$(display_path "$requested_state_root")"
+        activate_fallback_reporting || {
+            printf '%s；临时问题报告目录也无法创建。\n' "$FAILURE_MESSAGE" >&2
+            return 1
+        }
+        printf '%s；问题报告将临时保存在：%s\n' "$FAILURE_MESSAGE" "$REPORT_FILE" >&2
+        return 1
+    fi
     stamp="$(date '+%Y%m%d-%H%M%S')-$$"
     LOG_FILE="$STATE_ROOT/logs/$ACTION-$stamp.log"
     REPORT_FILE="$STATE_ROOT/diagnostics/report-$stamp.json"
-    : > "$LOG_FILE" || { printf '无法写入日志：%s\n' "$LOG_FILE" >&2; exit 1; }
+    if ! : > "$LOG_FILE"; then
+        STAGE="init-log-file"
+        FAILURE_MESSAGE="无法写入日志：$(display_path "$LOG_FILE")"
+        activate_fallback_reporting || {
+            printf '%s；临时问题报告目录也无法创建。\n' "$FAILURE_MESSAGE" >&2
+            return 1
+        }
+        printf '%s；问题报告将临时保存在：%s\n' "$FAILURE_MESSAGE" "$REPORT_FILE" >&2
+        return 1
+    fi
+    REPORTING_READY=true
 }
 
 find_app() {
@@ -285,6 +318,7 @@ check_resources() {
 
 get_locale() {
     [ -f "$CONFIG_PATH" ] || { printf ''; return; }
+    validate_config_shape || { printf ''; return; }
     /usr/bin/awk '
         BEGIN { inDesktop=0; found=0 }
         /^[[:space:]]*\[[^]]+\][[:space:]]*(#.*)?$/ {
@@ -306,15 +340,24 @@ get_locale() {
 validate_config_shape() {
     [ -f "$CONFIG_PATH" ] || return 0
     /usr/bin/awk '
-        BEGIN { desktop=0; locale=0; inline=0; inDesktop=0 }
-        /^[[:space:]]*desktop[[:space:]]*=[[:space:]]*\{/ { inline++ }
+        BEGIN { desktop=0; locale=0; complex=0; inDesktop=0 }
+        {
+            compact=$0
+            gsub(/[[:space:]]/, "", compact)
+            if (index($0, "\"\"\"") || index($0, "\047\047\047")) complex++
+            if (compact ~ /^desktop\./ || compact ~ /^\"desktop\"\./ || compact ~ /^\047desktop\047\./) complex++
+            if (compact ~ /^desktop=\{/ || compact ~ /^\"desktop\"=\{/ || compact ~ /^\047desktop\047=\{/) complex++
+            if (compact ~ /^\[\"desktop\"\]/ || compact ~ /^\[\047desktop\047\]/ || compact ~ /^\[\[desktop\]\]/) complex++
+            if (compact ~ /^\[desktop\](#.*)?$/ && $0 !~ /^[[:space:]]*\[desktop\][[:space:]]*(#.*)?$/) complex++
+        }
         /^[[:space:]]*\[[^]]+\][[:space:]]*(#.*)?$/ {
             inDesktop = ($0 ~ /^[[:space:]]*\[desktop\][[:space:]]*(#.*)?$/)
             if (inDesktop) desktop++
             next
         }
         inDesktop && /^[[:space:]]*localeOverride[[:space:]]*=/ { locale++ }
-        END { if (desktop > 1 || locale > 1 || inline > 0) exit 1 }
+        inDesktop && /^[[:space:]]*["\047]localeOverride["\047][[:space:]]*=/ { complex++ }
+        END { if (desktop > 1 || locale > 1 || complex > 0) exit 1 }
     ' "$CONFIG_PATH"
 }
 
@@ -331,7 +374,7 @@ write_locale_transaction() {
     free_kb="$(available_kb "$CODEX_HOME")"
     case "$free_kb" in ''|*[!0-9]*) FAILURE_MESSAGE="无法读取配置目录剩余空间"; return 1 ;; esac
     if [ "$free_kb" -lt 1024 ]; then FAILURE_MESSAGE="配置目录剩余空间不足 1 MB"; return 1; fi
-    validate_config_shape || { FAILURE_MESSAGE="config.toml 中存在重复 [desktop]、重复 localeOverride 或内联 desktop 配置，已安全停止"; return 1; }
+    validate_config_shape || { FAILURE_MESSAGE="config.toml 使用了重复或复杂 TOML 写法，工具无法保证安全修改，已停止且未改动配置"; return 1; }
 
     backup_path=""
     original_existed=0
@@ -343,6 +386,17 @@ write_locale_transaction() {
     fi
     LAST_BACKUP_PATH="$backup_path"
     LAST_CONFIG_ORIGINAL="$original_existed"
+
+    state_backup_path=""
+    state_original_existed=0
+    if [ -f "$ACTIVE_STATE_PATH" ]; then
+        state_original_existed=1
+        state_backup_path="$(mktemp "$STATE_ROOT/.active-state.rollback.XXXXXX")" || { FAILURE_MESSAGE="无法准备状态回滚文件"; return 1; }
+        remember_temp "$state_backup_path"
+        /bin/cp -p -- "$ACTIVE_STATE_PATH" "$state_backup_path" || { FAILURE_MESSAGE="无法备份当前安装状态"; return 1; }
+    fi
+    LAST_STATE_BACKUP_PATH="$state_backup_path"
+    LAST_STATE_ORIGINAL="$state_original_existed"
 
     config_tmp="$(mktemp "$CODEX_HOME/.config.toml.XXXXXX")" || { FAILURE_MESSAGE="无法创建临时配置"; return 1; }
     remember_temp "$config_tmp"
@@ -375,18 +429,27 @@ write_locale_transaction() {
     ' "$source_config" > "$config_tmp" || { FAILURE_MESSAGE="无法生成新配置"; return 1; }
     chmod 600 "$config_tmp" 2>/dev/null || true
     if [ "${CODEX_ZH_TEST_FAIL_STAGE:-}" = "config" ]; then FAILURE_MESSAGE="测试：配置写入中断"; return 1; fi
-    /bin/mv -f -- "$config_tmp" "$CONFIG_PATH" || { FAILURE_MESSAGE="无法原子替换 config.toml"; return 1; }
+    TRANSACTION_ACTIVE=1
+    /bin/mv -f -- "$config_tmp" "$CONFIG_PATH" || {
+        FAILURE_MESSAGE="无法原子替换 config.toml"
+        rollback_transaction || FAILURE_MESSAGE="${FAILURE_MESSAGE}，且自动回滚失败"
+        return 1
+    }
 
     CURRENT_LOCALE="$(get_locale)"
     if [ "$CURRENT_LOCALE" != "$desired" ]; then
         FAILURE_MESSAGE="语言配置写入后回读不一致"
-        rollback_config "$backup_path" "$original_existed"
+        rollback_transaction || FAILURE_MESSAGE="${FAILURE_MESSAGE}，且自动回滚失败"
         return 1
+    fi
+
+    if [ "${CODEX_ZH_TEST_WAIT_FOR_SIGNAL:-0}" = "1" ]; then
+        while :; do :; done
     fi
 
     if [ "${CODEX_ZH_TEST_FAIL_STAGE:-}" = "state" ]; then
         FAILURE_MESSAGE="测试：状态文件写入中断"
-        rollback_config "$backup_path" "$original_existed"
+        rollback_transaction || FAILURE_MESSAGE="${FAILURE_MESSAGE}，且自动回滚失败"
         return 1
     fi
     return 0
@@ -395,11 +458,29 @@ write_locale_transaction() {
 rollback_config() {
     backup_path="$1"
     original_existed="$2"
-    if [ "$original_existed" -eq 1 ] && [ -f "$backup_path" ]; then
-        /bin/cp -p -- "$backup_path" "$CONFIG_PATH" 2>/dev/null || true
+    if [ "$original_existed" -eq 1 ]; then
+        [ -f "$backup_path" ] || return 1
+        /bin/cp -p -- "$backup_path" "$CONFIG_PATH" 2>/dev/null
     elif [ "$original_existed" -eq 0 ] && [ -f "$CONFIG_PATH" ]; then
-        /bin/rm -f -- "$CONFIG_PATH" 2>/dev/null || true
+        /bin/rm -f -- "$CONFIG_PATH" 2>/dev/null
     fi
+}
+
+rollback_transaction() {
+    [ "$TRANSACTION_ACTIVE" -eq 1 ] || return 0
+    rollback_status=0
+    rollback_config "$LAST_BACKUP_PATH" "$LAST_CONFIG_ORIGINAL" || rollback_status=1
+    if [ "$LAST_STATE_ORIGINAL" -eq 1 ] && [ -f "$LAST_STATE_BACKUP_PATH" ]; then
+        /bin/cp -p -- "$LAST_STATE_BACKUP_PATH" "$ACTIVE_STATE_PATH" 2>/dev/null || rollback_status=1
+    elif [ "$LAST_STATE_ORIGINAL" -eq 0 ] && [ -f "$ACTIVE_STATE_PATH" ]; then
+        /bin/rm -f -- "$ACTIVE_STATE_PATH" 2>/dev/null || rollback_status=1
+    fi
+    TRANSACTION_ACTIVE=0
+    return "$rollback_status"
+}
+
+commit_transaction() {
+    TRANSACTION_ACTIVE=0
 }
 
 asar_sha256() {
@@ -601,12 +682,23 @@ action_install() {
     CURRENT_LOCALE="$(get_locale)"
     info "[3/4] 正在保存已验证状态……"
     write_active_state "zh-CN" || {
-        rollback_config "$LAST_BACKUP_PATH" "$LAST_CONFIG_ORIGINAL"
-        FAILURE_MESSAGE="无法保存安装状态，语言配置已回滚，备份仍保留"
+        if rollback_transaction; then
+            FAILURE_MESSAGE="无法保存安装状态，语言配置已回滚，备份仍保留"
+        else
+            FAILURE_MESSAGE="无法保存安装状态，自动回滚也失败；请把问题报告交给助教，备份仍保留"
+        fi
         return 1
     }
     inspect_all || true
-    if [ "$INSTALLATION_READY" != true ]; then FAILURE_MESSAGE="安装后复查未通过"; return 1; fi
+    if [ "$INSTALLATION_READY" != true ]; then
+        if rollback_transaction; then
+            FAILURE_MESSAGE="安装后复查未通过，语言配置和启动状态已回滚"
+        else
+            FAILURE_MESSAGE="安装后复查未通过，自动回滚也失败；请把问题报告交给助教"
+        fi
+        return 1
+    fi
+    commit_transaction
     ok "中文资源齐备，安装准备完成；官方程序和用户数据未被修改"
     if [ "$NO_RESTART" -eq 1 ]; then
         info "[4/4] 已按安全默认跳过重启，当前任务不会被关闭。"
@@ -648,8 +740,16 @@ action_restore() {
     write_locale_transaction "en-US" || return 1
     CURRENT_LOCALE="$(get_locale)"
     if [ -n "$APP_PATH" ]; then
-        write_active_state "english" || { FAILURE_MESSAGE="英文配置已写入，但无法保存恢复状态"; return 1; }
+        write_active_state "english" || {
+            if rollback_transaction; then
+                FAILURE_MESSAGE="无法保存恢复状态，英文配置已回滚，备份仍保留"
+            else
+                FAILURE_MESSAGE="无法保存恢复状态，自动回滚也失败；请把问题报告交给助教，备份仍保留"
+            fi
+            return 1
+        }
     fi
+    commit_transaction
     INSTALLATION_READY=false
     STATE_VALID=false
     if [ "$NO_RESTART" -eq 1 ]; then
@@ -664,18 +764,43 @@ action_restore() {
     return 0
 }
 
+handle_signal() {
+    signal_name="$1"
+    trap - HUP INT TERM
+    STAGE="interrupted"
+    FAILURE_MESSAGE="操作收到 $signal_name 信号并中断"
+    LAST_RESULT="failed"
+    if rollback_transaction; then
+        FAILURE_MESSAGE="${FAILURE_MESSAGE}；任何未完成的语言配置和启动状态均已回滚"
+    else
+        FAILURE_MESSAGE="${FAILURE_MESSAGE}；自动回滚失败，请把问题报告和备份交给助教"
+    fi
+    warn "$FAILURE_MESSAGE"
+    if [ "$REPORTING_READY" = true ]; then
+        write_report "$LAST_RESULT" "$FAILURE_MESSAGE" || warn "无法保存中断问题报告"
+        [ -n "$REPORT_FILE" ] && printf '问题报告：%s\n' "$REPORT_FILE" >&2
+    fi
+    exit 130
+}
+
 main() {
-    trap cleanup EXIT HUP INT TERM
+    trap cleanup EXIT
+    trap 'handle_signal HUP' HUP
+    trap 'handle_signal INT' INT
+    trap 'handle_signal TERM' TERM
     parse_args "$@"
-    init_paths
-    info "Codex macOS 中文支持工具 v$TOOL_VERSION"
     result=0
-    case "$ACTION" in
-        install) action_install || result=$? ;;
-        status) action_status || result=$? ;;
-        open) action_open || result=$? ;;
-        restore) action_restore || result=$? ;;
-    esac
+    if init_paths; then
+        info "Codex macOS 中文支持工具 v$TOOL_VERSION"
+        case "$ACTION" in
+            install) action_install || result=$? ;;
+            status) action_status || result=$? ;;
+            open) action_open || result=$? ;;
+            restore) action_restore || result=$? ;;
+        esac
+    else
+        result=1
+    fi
     if [ "$result" -ne 0 ]; then
         LAST_RESULT="failed"
         [ -n "$FAILURE_MESSAGE" ] || FAILURE_MESSAGE="操作在 $STAGE 阶段失败"
@@ -684,6 +809,10 @@ main() {
     if [ -n "$APP_PATH" ]; then
         CURRENT_LOCALE="$(get_locale)"
         if is_program_running; then PROGRAM_RUNNING=true; fi
+    fi
+    if [ "$REPORTING_READY" != true ]; then
+        printf '无法创建任何问题报告，请把上面的错误原文交给助教。\n' >&2
+        return "$result"
     fi
     write_report "$LAST_RESULT" "$FAILURE_MESSAGE" || warn "无法保存 JSON 问题报告"
     if [ "$ACTION" = "status" ] && [ "$JSON_OUTPUT" -eq 1 ]; then

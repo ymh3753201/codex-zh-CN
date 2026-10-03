@@ -158,4 +158,68 @@ REPORT="$(latest_report "$HOME_INTEL")"
 assert_eq "$(json_value "$REPORT" architectureCompatible)" "true" "Intel 架构判断错误"
 pass "Apple Silicon 与 Intel 架构分支"
 
+# 12. 路径包含竖线时，只清理工具自己创建的临时文件。
+DECOY_ROOT="$CASE_ROOT/清理保护"
+HOME_PIPE="$CASE_ROOT/清理保护|数据"
+mkdir -p -- "$DECOY_ROOT" "$HOME_PIPE"
+printf 'must-stay\n' > "$DECOY_ROOT/不可删除.txt"
+run_tool "$APP" "$HOME_PIPE" --action status --json >/dev/null || fail "竖线路径状态检查失败"
+assert_file "$DECOY_ROOT/不可删除.txt" "竖线路径清理误删了无关目录"
+pass "竖线、中文和空格路径的安全清理"
+
+# 13. 复杂 TOML 必须安全停止，不能误改多行字符串或点分键。
+HOME_MULTILINE="$CASE_ROOT/多行 TOML"; mkdir -p -- "$HOME_MULTILINE"
+printf 'student_note = """\n[desktop]\nlocaleOverride = "en-US"\n"""\n' > "$HOME_MULTILINE/config.toml"
+MULTILINE_HASH="$(shasum -a 256 "$HOME_MULTILINE/config.toml" | awk '{print $1}')"
+if run_tool "$APP" "$HOME_MULTILINE" --action install --no-restart >/dev/null 2>&1; then fail "多行 TOML 被错误修改"; fi
+assert_eq "$(shasum -a 256 "$HOME_MULTILINE/config.toml" | awk '{print $1}')" "$MULTILINE_HASH" "多行 TOML 失败后配置发生变化"
+assert_not_file "$HOME_MULTILINE/zh-cn-tool/macos/active-state.json" "多行 TOML 失败后不应激活状态"
+
+HOME_DOTTED="$CASE_ROOT/点分 TOML"; mkdir -p -- "$HOME_DOTTED"
+printf 'desktop.localeOverride = "en-US"\nmodel = "keep-me"\n' > "$HOME_DOTTED/config.toml"
+DOTTED_HASH="$(shasum -a 256 "$HOME_DOTTED/config.toml" | awk '{print $1}')"
+if run_tool "$APP" "$HOME_DOTTED" --action install --no-restart >/dev/null 2>&1; then fail "点分 TOML 被错误修改"; fi
+assert_eq "$(shasum -a 256 "$HOME_DOTTED/config.toml" | awk '{print $1}')" "$DOTTED_HASH" "点分 TOML 失败后配置发生变化"
+assert_not_file "$HOME_DOTTED/zh-cn-tool/macos/active-state.json" "点分 TOML 失败后不应激活状态"
+pass "复杂 TOML 安全停止"
+
+# 14. 收到终止信号时回滚配置，不留下未完成的启动状态，并生成报告。
+HOME_SIGNAL="$CASE_ROOT/真实信号中断"; mkdir -p -- "$HOME_SIGNAL"
+printf 'approval_policy = "never"\n' > "$HOME_SIGNAL/config.toml"
+SIGNAL_HASH="$(shasum -a 256 "$HOME_SIGNAL/config.toml" | awk '{print $1}')"
+SIGNAL_OUTPUT="$CASE_ROOT/signal-output.txt"
+CODEX_ZH_TESTING=1 \
+CODEX_ZH_TEST_ARCH="$(uname -m)" \
+CODEX_ZH_TEST_MACHINE_ARCH="$(uname -m)" \
+CODEX_ZH_TEST_WAIT_FOR_SIGNAL=1 \
+/bin/bash "$INSTALLER" --app "$APP" --codex-home "$HOME_SIGNAL" --action install --no-restart > "$SIGNAL_OUTPUT" 2>&1 &
+SIGNAL_PID=$!
+signal_ready=0
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+    if grep -F -q 'localeOverride = "zh-CN"' "$HOME_SIGNAL/config.toml" 2>/dev/null; then signal_ready=1; break; fi
+    sleep 0.2
+done
+[ "$signal_ready" -eq 1 ] || { kill -TERM "$SIGNAL_PID" 2>/dev/null || true; wait "$SIGNAL_PID" 2>/dev/null || true; fail "中断测试未进入配置事务"; }
+kill -TERM "$SIGNAL_PID"
+if wait "$SIGNAL_PID"; then fail "终止信号被错误当成成功"; fi
+assert_eq "$(shasum -a 256 "$HOME_SIGNAL/config.toml" | awk '{print $1}')" "$SIGNAL_HASH" "终止信号后没有回滚配置"
+assert_not_file "$HOME_SIGNAL/zh-cn-tool/macos/active-state.json" "终止信号后不应激活状态"
+REPORT="$(latest_report "$HOME_SIGNAL")"
+assert_file "$REPORT" "终止信号后没有问题报告"
+assert_eq "$(json_value "$REPORT" failureStage)" "interrupted" "中断报告没有记录失败阶段"
+pass "真实终止信号回滚和问题报告"
+
+# 15. 默认状态目录不可用时，改在临时目录留下可交给助教的问题报告。
+HOME_REPORT_FAIL="$CASE_ROOT/报告兜底数据"; mkdir -p -- "$HOME_REPORT_FAIL"
+BLOCKED_STATE="$CASE_ROOT/状态目录被文件占用"
+FALLBACK_PARENT="$CASE_ROOT/临时报告"; mkdir -p -- "$FALLBACK_PARENT"
+printf 'block-directory\n' > "$BLOCKED_STATE"
+if FALLBACK_OUTPUT="$(TMPDIR="$FALLBACK_PARENT" run_tool "$APP" "$HOME_REPORT_FAIL" --state-root "$BLOCKED_STATE" --action install --no-restart 2>&1)"; then
+    fail "不可写状态目录被错误接受"
+fi
+FALLBACK_REPORT="$(printf '%s\n' "$FALLBACK_OUTPUT" | sed -n 's/^  问题报告：//p' | tail -n 1)"
+assert_file "$FALLBACK_REPORT" "状态目录失败时没有生成兜底问题报告"
+assert_eq "$(json_value "$FALLBACK_REPORT" failureStage)" "init-state-directory" "兜底报告没有记录失败阶段"
+pass "状态目录失败时的临时问题报告"
+
 printf '\n[PASS] macOS 自动回归完成：%s 组\n' "$PASS_COUNT"
