@@ -4,7 +4,7 @@
 
 ## macOS 预览支持
 
-macOS 工具版本为 `0.1.0-preview.2`。它使用官方 `localeOverride` 语言设置，不复制或修改官方 `.app`，不破坏应用签名，也不要求 Node.js、Python 或 Homebrew。
+macOS 工具版本为 `0.1.0-preview.3`。它使用官方 `localeOverride` 语言设置，不复制或修改官方 `.app`，不破坏应用签名，也不要求 Node.js、Python 或 Homebrew。主界面可能还受远程翻译开关控制；设置写入成功并不保证界面中文，新版会明确报告“部分完成”及实际英文的验收失败。
 
 解压 macOS 工具包后按顺序使用：
 

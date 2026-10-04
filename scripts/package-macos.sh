@@ -23,8 +23,10 @@ macOS-检查状态.command
 macOS-打开中文版.command
 macOS-恢复英文.command
 scripts/install_macos.sh
+scripts/inspect-macos-asar.js
 resources/macos-release.json
 docs/macOS零基础安装教程.md
+docs/macOS语言开关反馈审查-2026-10-04.md
 LICENSE
 "
 

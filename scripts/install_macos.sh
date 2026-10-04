@@ -5,7 +5,8 @@
 
 set -u
 
-TOOL_VERSION="0.1.0-preview.2"
+TOOL_VERSION="0.1.0-preview.3"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 BUNDLE_ID="com.openai.codex"
 EXPECTED_TEAM_ID="2DC432GLL2"
 ACTION="install"
@@ -14,6 +15,7 @@ JSON_OUTPUT=0
 APP_OVERRIDE=""
 CODEX_HOME_OVERRIDE=""
 STATE_ROOT_OVERRIDE=""
+UI_RESULT=""
 
 STAGE="startup"
 FAILURE_MESSAGE=""
@@ -36,6 +38,13 @@ ARCHITECTURE_COMPATIBLE=false
 STATE_VALID=false
 SOURCE_CHANGED=false
 INSTALLATION_READY=false
+SETTINGS_PREPARED=false
+LANGUAGE_GATE_DETECTED=false
+LANGUAGE_GATE_STATUS="unknown"
+GATE_EVIDENCE="[]"
+RESOURCE_CHECK_ERROR=""
+TOOL_ISSUE_SUSPECTED=false
+PROBLEM_CLASSIFICATION="none"
 PROGRAM_RUNNING=false
 UI_LANGUAGE_VERIFIED=false
 UI_VERIFICATION_STATUS="pending-user-check"
@@ -66,6 +75,8 @@ usage() {
   --no-restart       不退出当前 Codex（默认，适合让 Codex 中的 AI 执行）
   --restart          安装或恢复后退出并重新打开 Codex
   --json             状态检查只输出 JSON
+  --ui-result english|chinese
+                     检查状态时记录用户亲眼看到的菜单和主界面结果
   --app PATH         手动指定 Codex.app 或 ChatGPT.app
   --codex-home PATH  手动指定 Codex 数据目录
   --help              显示帮助
@@ -148,6 +159,9 @@ parse_args() {
             --no-restart) NO_RESTART=1; shift ;;
             --restart) NO_RESTART=0; shift ;;
             --json) JSON_OUTPUT=1; shift ;;
+            --ui-result)
+                [ "$#" -ge 2 ] || { printf '缺少 --ui-result 参数\n' >&2; exit 2; }
+                UI_RESULT="$2"; shift 2 ;;
             --app)
                 [ "$#" -ge 2 ] || { printf '缺少 --app 路径\n' >&2; exit 2; }
                 APP_OVERRIDE="$2"; shift 2 ;;
@@ -162,6 +176,10 @@ parse_args() {
         esac
     done
     case "$ACTION" in install|status|open|restore) ;; *) printf '不支持的操作：%s\n' "$ACTION" >&2; exit 2 ;; esac
+    if [ -n "$UI_RESULT" ]; then
+        case "$UI_RESULT" in english|chinese) ;; *) printf '界面结果只支持 english 或 chinese\n' >&2; exit 2 ;; esac
+        [ "$ACTION" = status ] || { printf '--ui-result 只能与 --action status 一起使用\n' >&2; exit 2; }
+    fi
 }
 
 activate_fallback_reporting() {
@@ -288,32 +306,29 @@ verify_signature() {
     [ "$SIGNATURE_VALID" = true ] && [ "$NOTARIZATION_ACCEPTED" = true ]
 }
 
-read_u32_le() {
-    /usr/bin/od -An -tu4 -N4 -j "$2" "$1" 2>/dev/null | tr -d '[:space:]'
-}
-
 check_resources() {
     STAGE="check-resources"
     asar="$APP_PATH/Contents/Resources/app.asar"
     [ -f "$asar" ] || return 1
-    header_size="$(read_u32_le "$asar" 4)"
-    json_size="$(read_u32_le "$asar" 12)"
-    case "$header_size:$json_size" in
-        :*|*:) return 1 ;;
-    esac
-    if [ "$header_size" -lt 8 ] || [ "$header_size" -gt 67108864 ] || [ "$json_size" -lt 2 ] || [ "$json_size" -gt 67108864 ]; then return 1; fi
-    header_file="$(mktemp "$STATE_ROOT/.asar-header.XXXXXX")" || return 1
-    remember_temp "$header_file"
-    /bin/dd if="$asar" of="$header_file" bs=1 skip=16 count="$json_size" 2>> "$LOG_FILE" || return 1
-    if LC_ALL=C grep -a -q '"native-menu-locales"' "$header_file" && LC_ALL=C grep -a -q '"zh-CN.json"' "$header_file"; then NATIVE_MENU_ZH=true; fi
-    if LC_ALL=C grep -a -q '"webview"' "$header_file" && LC_ALL=C grep -a -q '"zh-CN-[^"]*\.js"' "$header_file"; then WEBVIEW_ZH=true; fi
-    if LC_ALL=C grep -a -m 1 -q 'localeOverride' "$asar"; then LOCALE_OVERRIDE_SUPPORTED=true; fi
-    if LC_ALL=C grep -a -m 1 -q 'nativeIntl' "$asar"; then NATIVE_INTL_SUPPORTED=true; fi
-    if [ "$NATIVE_MENU_ZH" = true ] && [ "$WEBVIEW_ZH" = true ] && [ "$LOCALE_OVERRIDE_SUPPORTED" = true ] && [ "$NATIVE_INTL_SUPPORTED" = true ]; then
-        RESOURCES_READY=true
-        return 0
+    inspection_file="$(mktemp "$STATE_ROOT/.asar-inspection.XXXXXX")" || return 1
+    inspection_error="$(mktemp "$STATE_ROOT/.asar-error.XXXXXX")" || return 1
+    remember_temp "$inspection_file"; remember_temp "$inspection_error"
+    if ! /usr/bin/osascript -l JavaScript "$SCRIPT_DIR/inspect-macos-asar.js" "$asar" > "$inspection_file" 2> "$inspection_error"; then
+        RESOURCE_CHECK_ERROR="$(head -c 1500 "$inspection_error" | sed 's/^.*execution error: //')"
+        return 1
     fi
-    return 1
+    [ "$(json_get "$inspection_file" resourcesReady)" = true ] || return 1
+    LANGUAGE_GATE_DETECTED="$(json_bool "$(json_get "$inspection_file" languageGateDetected)")"
+    LANGUAGE_GATE_STATUS="$(json_get "$inspection_file" languageGateStatus)"
+    GATE_EVIDENCE="$(/usr/bin/plutil -extract gateEvidence json -o - "$inspection_file" 2>/dev/null || printf '[]')"
+    expected_header_hash="$(plist_value "$APP_PATH/Contents/Info.plist" 'ElectronAsarIntegrity:Resources/app.asar:hash')"
+    if [ -n "$expected_header_hash" ] && [ "$expected_header_hash" != "$(json_get "$inspection_file" headerSha256)" ]; then
+        RESOURCE_CHECK_ERROR="Info.plist 与 ASAR 文件头 SHA-256 不一致"
+        return 1
+    fi
+    NATIVE_MENU_ZH=true; WEBVIEW_ZH=true; LOCALE_OVERRIDE_SUPPORTED=true; NATIVE_INTL_SUPPORTED=true
+    RESOURCES_READY=true
+    return 0
 }
 
 get_locale() {
@@ -524,7 +539,10 @@ load_state() {
         return 0
     fi
     if [ "$state_mode" = "english" ]; then return 0; fi
-    if [ "$state_app" != "$APP_PATH" ] || [ "$state_hash" != "$(asar_sha256)" ]; then SOURCE_CHANGED=true; return 0; fi
+    if [ "$state_app" != "$APP_PATH" ] || [ "$state_hash" != "$(asar_sha256)" ] ||
+       [ "$(json_get "$ACTIVE_STATE_PATH" codexVersion)" != "$APP_VERSION" ] ||
+       [ "$(json_get "$ACTIVE_STATE_PATH" buildVersion)" != "$BUILD_VERSION" ]; then SOURCE_CHANGED=true; return 0; fi
+    [ "$(json_get "$ACTIVE_STATE_PATH" toolVersion)" = "$TOOL_VERSION" ] || return 0
     STATE_VALID=true
 }
 
@@ -572,6 +590,8 @@ inspect_all() {
     APP_PATH=""; APP_EXECUTABLE=""; APP_VERSION=""; BUILD_VERSION=""; APP_ARCHITECTURES=""
     SIGNATURE_VALID=false; NOTARIZATION_ACCEPTED=false; RESOURCES_READY=false
     NATIVE_MENU_ZH=false; WEBVIEW_ZH=false; LOCALE_OVERRIDE_SUPPORTED=false; NATIVE_INTL_SUPPORTED=false
+    LANGUAGE_GATE_DETECTED=false; LANGUAGE_GATE_STATUS="unknown"; GATE_EVIDENCE="[]"; RESOURCE_CHECK_ERROR=""
+    SETTINGS_PREPARED=false; INSTALLATION_READY=false; STATE_VALID=false; SOURCE_CHANGED=false
     ARCHITECTURE_COMPATIBLE=false; PROGRAM_RUNNING=false
     if ! find_app; then return 1; fi
     detect_architectures
@@ -582,10 +602,13 @@ inspect_all() {
     if is_program_running; then PROGRAM_RUNNING=true; fi
     if [ "$CURRENT_LOCALE" = "zh-CN" ] && [ "$SIGNATURE_VALID" = true ] && [ "$NOTARIZATION_ACCEPTED" = true ] &&
        [ "$RESOURCES_READY" = true ] && [ "$ARCHITECTURE_COMPATIBLE" = true ] && [ "$STATE_VALID" = true ]; then
-        INSTALLATION_READY=true
+        SETTINGS_PREPARED=true
     else
-        INSTALLATION_READY=false
+        SETTINGS_PREPARED=false
     fi
+    INSTALLATION_READY=false
+    # Neither finding a default nor failing to find a known gate proves runtime activation.
+    # Only this check's explicit user confirmation can complete native-mode acceptance.
     return 0
 }
 
@@ -597,6 +620,9 @@ calculate_next_action() {
     elif [ "$SOURCE_CHANGED" = true ]; then NEXT_ACTION="rerun-macos-installer-after-official-update"
     elif [ "$CURRENT_LOCALE" != "zh-CN" ]; then NEXT_ACTION="run-macos-installer"
     elif [ "$STATE_VALID" != true ]; then NEXT_ACTION="rerun-macos-installer"
+    elif [ "$UI_RESULT" = english ]; then NEXT_ACTION="send-ui-failure-report-to-tutor"
+    elif [ "$LANGUAGE_GATE_STATUS" = "unrecognized" ]; then NEXT_ACTION="send-unsupported-language-logic-report-to-tutor"
+    elif [ "$INSTALLATION_READY" != true ]; then NEXT_ACTION="verify-chinese-ui-or-report-language-gate"
     elif [ "$PROGRAM_RUNNING" = true ]; then NEXT_ACTION="check-chinese-ui"
     else NEXT_ACTION="open-chinese-codex-and-check-ui"
     fi
@@ -633,6 +659,13 @@ write_report() {
     json_insert_bool "$report_tmp" webviewZhCn "$WEBVIEW_ZH"
     json_insert_bool "$report_tmp" localeOverrideSupported "$LOCALE_OVERRIDE_SUPPORTED"
     json_insert_bool "$report_tmp" nativeIntlSupported "$NATIVE_INTL_SUPPORTED"
+    json_insert_bool "$report_tmp" settingsPrepared "$SETTINGS_PREPARED"
+    json_insert_bool "$report_tmp" languageGateDetected "$LANGUAGE_GATE_DETECTED"
+    json_insert_string "$report_tmp" languageGateStatus "$LANGUAGE_GATE_STATUS"
+    json_insert_string "$report_tmp" remoteLanguageGateValue "unknown"
+    /usr/bin/plutil -insert languageGateEvidence -json "$GATE_EVIDENCE" "$report_tmp" || return 1
+    json_insert_bool "$report_tmp" toolIssueSuspected "$TOOL_ISSUE_SUSPECTED"
+    json_insert_string "$report_tmp" problemClassification "$PROBLEM_CLASSIFICATION"
     json_insert_bool "$report_tmp" installationReady "$INSTALLATION_READY"
     json_insert_bool "$report_tmp" launchAttempted "$LAUNCH_ATTEMPTED"
     json_insert_bool "$report_tmp" programRunning "$PROGRAM_RUNNING"
@@ -657,18 +690,23 @@ show_summary() {
     printf '  机器 / 程序架构：%s / %s\n' "$MACHINE_ARCH" "${APP_ARCHITECTURES:-未知}"
     printf '  官方签名与公证：%s / %s\n' "$SIGNATURE_VALID" "$NOTARIZATION_ACCEPTED"
     printf '  中文资源齐备：%s\n' "$RESOURCES_READY"
+    printf '  语言设置准备完成：%s\n' "$SETTINGS_PREPARED"
+    printf '  主界面翻译开关：%s（账号实际开关值未知）\n' "$LANGUAGE_GATE_STATUS"
     printf '  安装准备完成：%s\n' "$INSTALLATION_READY"
     printf '  程序正在运行：%s（不等于界面已中文）\n' "$PROGRAM_RUNNING"
     printf '  界面中文已确认：%s（需学员人工查看）\n' "$UI_LANGUAGE_VERIFIED"
+    if [ "$SETTINGS_PREPARED" = true ] && [ "$INSTALLATION_READY" != true ]; then
+        printf '  注意：仅写入中文设置，尚不能确认主界面会加载中文；请勿报告汉化成功。\n'
+    fi
     printf '  下一步：%s\n' "$NEXT_ACTION"
     printf '  问题报告：%s\n' "$REPORT_FILE"
 }
 
 require_safe_app() {
-    if [ -z "$APP_PATH" ]; then FAILURE_MESSAGE="没有找到包标识为 $BUNDLE_ID 的官方 Codex。请先安装并打开一次 Codex。"; return 1; fi
-    if [ "$SIGNATURE_VALID" != true ] || [ "$NOTARIZATION_ACCEPTED" != true ]; then FAILURE_MESSAGE="官方应用签名或 Apple 公证检查未通过，工具已停止且不会关闭系统安全保护。"; return 1; fi
-    if [ "$ARCHITECTURE_COMPATIBLE" != true ]; then FAILURE_MESSAGE="Codex 程序架构与当前 Mac 不匹配。"; return 1; fi
-    if [ "$RESOURCES_READY" != true ]; then FAILURE_MESSAGE="当前 Codex.app 中没有检测到完整的官方简体中文资源或语言开关。"; return 1; fi
+    if [ -z "$APP_PATH" ]; then STAGE="discover-app"; FAILURE_MESSAGE="没有找到包标识为 $BUNDLE_ID 的官方 Codex。请先安装并打开一次 Codex。"; return 1; fi
+    if [ "$SIGNATURE_VALID" != true ] || [ "$NOTARIZATION_ACCEPTED" != true ]; then STAGE="verify-signature"; FAILURE_MESSAGE="官方应用签名或 Apple 公证检查未通过，工具已停止且不会关闭系统安全保护。"; return 1; fi
+    if [ "$ARCHITECTURE_COMPATIBLE" != true ]; then STAGE="verify-architecture"; FAILURE_MESSAGE="Codex 程序架构与当前 Mac 不匹配。"; return 1; fi
+    if [ "$RESOURCES_READY" != true ]; then STAGE="check-resources"; FAILURE_MESSAGE="官方中文资源或完整性校验未通过。${RESOURCE_CHECK_ERROR}"; return 1; fi
     return 0
 }
 
@@ -690,7 +728,7 @@ action_install() {
         return 1
     }
     inspect_all || true
-    if [ "$INSTALLATION_READY" != true ]; then
+    if [ "$SETTINGS_PREPARED" != true ]; then
         if rollback_transaction; then
             FAILURE_MESSAGE="安装后复查未通过，语言配置和启动状态已回滚"
         else
@@ -699,7 +737,10 @@ action_install() {
         return 1
     fi
     commit_transaction
-    ok "中文资源齐备，安装准备完成；官方程序和用户数据未被修改"
+    ok "中文资源校验通过，官方语言设置已准备完成"
+    if [ "$INSTALLATION_READY" != true ]; then
+        warn "主界面翻译生效条件尚未确认。语言设置已写入，但汉化尚未完成；请亲眼检查菜单和主界面。"
+    fi
     if [ "$NO_RESTART" -eq 1 ]; then
         info "[4/4] 已按安全默认跳过重启，当前任务不会被关闭。"
         info '请保存当前任务并手动退出 Codex，再双击“macOS-打开中文版.command”。'
@@ -709,14 +750,26 @@ action_install() {
         open_app || return 1
         ok "已检测到 Codex 进程；界面中文仍需人工查看确认"
     fi
-    LAST_RESULT="success"
+    classify_language_result
     return 0
 }
 
 action_status() {
     STAGE="status"
     inspect_all || true
-    LAST_RESULT="success"
+    if [ "$UI_RESULT" = chinese ]; then
+        if [ "$SETTINGS_PREPARED" != true ]; then
+            FAILURE_MESSAGE="当前版本资源、签名或中文配置未通过检查，不能登记本次中文验收。"
+            return 1
+        fi
+        UI_LANGUAGE_VERIFIED=true
+        UI_VERIFICATION_STATUS="user-confirmed-chinese-this-check"
+        INSTALLATION_READY=true
+    elif [ "$UI_RESULT" = english ]; then
+        UI_VERIFICATION_STATUS="user-confirmed-english-this-check"
+        INSTALLATION_READY=false
+    fi
+    classify_language_result
     return 0
 }
 
@@ -730,7 +783,7 @@ action_open() {
     fi
     open_app || return 1
     ok "已检测到 Codex 进程；请人工确认菜单和主界面是否为中文"
-    LAST_RESULT="success"
+    classify_language_result
     return 0
 }
 
@@ -751,6 +804,7 @@ action_restore() {
     fi
     commit_transaction
     INSTALLATION_READY=false
+    SETTINGS_PREPARED=false
     STATE_VALID=false
     if [ "$NO_RESTART" -eq 1 ]; then
         info "已跳过自动重启；当前任务保持运行，下次启动 Codex 时显示英文。"
@@ -762,6 +816,31 @@ action_restore() {
     ok "已恢复英文设置；备份、官方程序、对话和其他配置均保留"
     LAST_RESULT="success"
     return 0
+}
+
+classify_language_result() {
+    LAST_RESULT="success"
+    if [ "$UI_RESULT" = english ]; then
+        STAGE="ui-language-verification"
+        LAST_RESULT="failed"
+        FAILURE_MESSAGE="用户确认菜单或主界面仍为英文；汉化未完成，不能仅因配置写入成功而归因上游。"
+        if [ "$SETTINGS_PREPARED" = true ]; then
+            TOOL_ISSUE_SUSPECTED=true
+            PROBLEM_CLASSIFICATION="tool-compatibility-gap"
+        else
+            PROBLEM_CLASSIFICATION="installation-or-environment-needs-check"
+        fi
+    elif [ "$SETTINGS_PREPARED" = true ] && [ "$INSTALLATION_READY" != true ]; then
+        LAST_RESULT="partial"
+        STAGE="verify-language-gate"
+        FAILURE_MESSAGE="中文语言设置已准备好；主界面翻译生效条件尚未验证，汉化未完成。"
+        if [ "$LANGUAGE_GATE_DETECTED" = true ] || [ "$LANGUAGE_GATE_STATUS" = unrecognized ]; then
+            TOOL_ISSUE_SUSPECTED=true
+            PROBLEM_CLASSIFICATION="language-gate-not-covered-by-tool"
+        else
+            PROBLEM_CLASSIFICATION="runtime-language-verification-required"
+        fi
+    fi
 }
 
 handle_signal() {
@@ -814,7 +893,10 @@ main() {
         printf '无法创建任何问题报告，请把上面的错误原文交给助教。\n' >&2
         return "$result"
     fi
-    write_report "$LAST_RESULT" "$FAILURE_MESSAGE" || warn "无法保存 JSON 问题报告"
+    if ! write_report "$LAST_RESULT" "$FAILURE_MESSAGE"; then
+        warn "无法保存 JSON 问题报告，请把上面的错误交给助教。"
+        return 1
+    fi
     if [ "$ACTION" = "status" ] && [ "$JSON_OUTPUT" -eq 1 ]; then
         cat "$REPORT_FILE"
     else

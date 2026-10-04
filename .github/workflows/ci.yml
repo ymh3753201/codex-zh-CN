@@ -164,6 +164,9 @@ jobs:
       - name: macOS 安装、升级、失败回滚和架构回归
         run: /bin/bash tests/test-macos.sh
 
+      - name: 远程翻译开关、界面反馈和资源字节校验
+        run: /bin/bash tests/test-macos-language-gate.sh
+
       - name: 生成 macOS 工具包和 SHA-256
         run: /bin/bash scripts/package-macos.sh
 

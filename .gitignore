@@ -9,6 +9,8 @@ Thumbs.db
 /launch-codex-zh-cn.ps1
 /Codex 汉化版.vbs
 codex-zh-CN-v*.zip
+/dist/codex-zh-CN-macOS-v*.zip
+/dist/codex-zh-CN-macOS-v*.sha256
 
 /diagnostics/
 /tests/__pycache__/
