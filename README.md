@@ -2,6 +2,12 @@
 
 面向零基础学员的非官方汉化工具，使用 Codex Desktop 自带的官方中文资源，保留官方程序、对话和其他配置。
 
+## 让本机 AI 帮学员下载和安装
+
+可直接发给学员的 Windows/macOS 通用指令见 [学员通用 AI 下载与汉化提示词](docs/学员通用AI下载与汉化提示词.md)。提示词会要求本机 Codex AI 只从本仓库下载、自动识别系统、默认不重启、先安全排障，并在疑似工具问题时生成脱敏的助教反馈正文。
+
+当前提示词固定到待验收分支 `codex/macos-support`，方便本轮学员测试。它不是正式 Release；维护者完成真实 Windows、Apple Silicon 和 Intel 界面验收后，应将提示词切换到正式版本标签。
+
 ## macOS 预览支持
 
 macOS 工具版本为 `0.1.0-preview.2`。它使用官方 `localeOverride` 语言设置，不复制或修改官方 `.app`，不破坏应用签名，也不要求 Node.js、Python 或 Homebrew。

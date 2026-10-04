@@ -158,6 +158,9 @@ jobs:
           uname -m
           /bin/bash --version | head -n 1
 
+      - name: 学员通用提示词完整性
+        run: /bin/bash tests/test-student-prompt.sh
+
       - name: macOS 安装、升级、失败回滚和架构回归
         run: /bin/bash tests/test-macos.sh
 
