@@ -6,7 +6,7 @@
 
 可直接发给学员的 Windows/macOS 通用指令见 [学员通用 AI 下载与汉化提示词](docs/学员通用AI下载与汉化提示词.md)。提示词会要求本机 Codex AI 只从本仓库下载、自动识别系统、默认不重启、先安全排障，并在疑似工具问题时生成脱敏的助教反馈正文。
 
-当前提示词固定到待验收分支 `codex/macos-support`，方便本轮学员测试。它不是正式 Release；维护者完成真实 Windows、Apple Silicon 和 Intel 界面验收后，应将提示词切换到正式版本标签。
+当前提示词固定到已通过 CI 和公开下载复核的待验收提交 `372bb3a5651730ac37cc7cf356e8c579dd587014`，确保本轮学员拿到相同内容。它不是正式 Release；维护者完成真实 Windows、Apple Silicon 和 Intel 界面验收后，应将提示词切换到正式版本标签。
 
 ## macOS 预览支持
 
