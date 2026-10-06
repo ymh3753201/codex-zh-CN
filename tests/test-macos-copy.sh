@@ -1,5 +1,6 @@
 #!/bin/bash
-set -eu
+set -Eeu
+trap 'printf "[FAIL] fixture line %s: %s\n" "$LINENO" "$BASH_COMMAND" >&2' ERR
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 INSTALLER="${CODEX_ZH_MACOS_INSTALLER:-$ROOT/scripts/install_macos.sh}"
 CASE="$(mktemp -d /tmp/codex-zh-copy-tests.XXXXXX)"
@@ -18,7 +19,15 @@ printf 'private conversation sentinel' > "$DATA/conversation-sentinel"
 sha() { shasum -a 256 "$1" | awk '{print $1}'; }
 OFFICIAL="$(sha "$APP/Contents/Resources/app.asar")"; INFO="$(sha "$APP/Contents/Info.plist")"
 PRIVATE="$(sha "$DATA/conversation-sentinel")"
-tool() { CODEX_ZH_TESTING=1 CODEX_ZH_TEST_ARCH="$(uname -m)" /bin/bash "$INSTALLER" --app "$APP" --codex-home "$DATA" "$@"; }
+tool() {
+    if CODEX_ZH_TESTING=1 CODEX_ZH_TEST_ARCH="$(uname -m)" /bin/bash "$INSTALLER" --app "$APP" --codex-home "$DATA" "$@"; then return 0; else
+        fixture_status=$?
+        # Fixtures contain no accounts or real user data; expose the failure stage in CI.
+        fixture_report="$(find "$DATA/zh-cn-tool/macos/diagnostics" -name 'report-*.json' | sort | tail -n 1)"
+        [ -z "$fixture_report" ] || /bin/cat "$fixture_report" >&2
+        return "$fixture_status"
+    fi
+}
 value() { /usr/bin/plutil -extract "$2" raw -o - "$1"; }
 report() { find "$DATA/zh-cn-tool/macos/diagnostics" -name 'report-*.json' | sort | tail -n 1; }
 assert() { [ "$1" = "$2" ] || { printf '[FAIL] %s: %s != %s\n' "$3" "$1" "$2" >&2; exit 1; }; }
@@ -31,6 +40,9 @@ tool --action install --no-restart >/dev/null
 assert "$(value "$STATE" mode)" zh-CN '已确认官方中文不得创建副本'
 tool --action status --ui-result english --json > "$CASE/native-english.json"
 assert "$(value "$STATE" nativeUiEnglishConfirmed)" true '实际英文反馈须绑定当前版本'
+tool --action status --json > "$CASE/native-later.json"
+assert "$(value "$CASE/native-later.json" nativeUiEnglishConfirmed)" true '后续报告应如实显示当前版本英文反馈'
+assert "$(value "$CASE/native-later.json" nextAction)" run-explicit-copy-fallback-after-native-ui-failure '后续建议与下次安装行为一致'
 tool --action install --no-restart >/dev/null
 COPY="$(value "$STATE" copyPath)"
 assert "$(value "$(report)" installationReady)" true '副本资源与本地签名准备完成'
@@ -147,6 +159,23 @@ GUARD_ROOT="$DATA/zh-cn-tool/macos/copies/copy.guard/Codex中文版.app"
 mkdir -p "$GUARD_ROOT"
 if /usr/bin/osascript -l JavaScript "$ROOT/scripts/inspect-macos-asar.js" "$APP/Contents/Resources/app.asar" --patch-copy "$CASE/fake" "$GUARD_ROOT" "$OFFICIAL" >/dev/null 2>&1; then exit 1; fi
 assert "$(sha "$APP/Contents/Resources/app.asar")" "$OFFICIAL" '直接调用写入函数不得修改官方文件'
+mkdir -p "$GUARD_ROOT/Contents/Resources"
+ln "$APP/Contents/Resources/app.asar" "$GUARD_ROOT/Contents/Resources/app.asar"
+if /usr/bin/osascript -l JavaScript "$ROOT/scripts/check-macos-copy-paths.js" "$GUARD_ROOT" >/dev/null 2>&1; then exit 1; fi
+if /usr/bin/osascript -l JavaScript "$ROOT/scripts/inspect-macos-asar.js" "$GUARD_ROOT/Contents/Resources/app.asar" --patch-copy "$APP/Contents/Resources/app.asar" "$GUARD_ROOT" "$OFFICIAL" >/dev/null 2>&1; then exit 1; fi
+assert "$(sha "$APP/Contents/Resources/app.asar")" "$OFFICIAL" '共享硬链接写入须拒绝且源文件不变'
+rm "$GUARD_ROOT/Contents/Resources/app.asar"
+
+tool --mode copy --action install --no-restart >/dev/null
+HARD_COPY="$(value "$STATE" copyPath)"
+mv "$HARD_COPY/Contents/Resources/app.asar" "$HARD_COPY/Contents/Resources/app.asar.saved"
+cp "$HARD_COPY/Contents/Resources/app.asar.saved" "$CASE/external-asar"
+ln "$CASE/external-asar" "$HARD_COPY/Contents/Resources/app.asar"
+EXTERNAL_HASH="$(sha "$CASE/external-asar")"
+if tool --action open >/dev/null 2>&1; then exit 1; fi
+assert "$(sha "$CASE/external-asar")" "$EXTERNAL_HASH" '受管副本中的共享硬链接不得被使用或修改'
+rm "$HARD_COPY/Contents/Resources/app.asar"
+mv "$HARD_COPY/Contents/Resources/app.asar.saved" "$HARD_COPY/Contents/Resources/app.asar"
 
 # An old native failure must not force a fallback after an official upgrade.
 tool --mode native --action install --no-restart >/dev/null

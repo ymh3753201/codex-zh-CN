@@ -56,6 +56,7 @@ macOS 如果拒绝启动，请保留报告交给助教；不要删除隔离属�
 
 - resourcesReady：官方中文资源的实际字节和完整性记录通过。
 - settingsPrepared：语言设置和当前版本状态通过检查。
+- nativeUiEnglishConfirmed：本版本官方界面曾由你确认仍英文；普通后续检查也会保留兼容汉化建议。官方升级后不沿用该反馈。
 - installationReady：兼容副本已完整准备且签名通过；**不等于已启动或界面已中文**。仅官方设置模式需要本次明确中文确认才能为真。
 - copyActivated：该副本曾通过启动检查。失败或中断的复制不会激活。
 - copySignatureKind / copyNotarizationAccepted：如实区分本地签名和公证，不能把官方公证当成副本公证。

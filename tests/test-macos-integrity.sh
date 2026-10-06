@@ -32,4 +32,10 @@ for mode in bad-hash bad-version bad-size truncated; do
     [ "$(shasum -a 256 "$BUNDLE/Contents/Frameworks/binary" | awk '{print $1}')" = "$HASH" ]
 done
 if /usr/bin/osascript -l JavaScript "$ROOT/scripts/macos-integrity.js" "$CASE/arm64" "$OLD" "$NEW" "$BUNDLE" "$CASE/intel" "$HASH" >/dev/null 2>&1; then exit 1; fi
+BUNDLE="$CASE/copies/copy.hardlink/Codex中文版.app"
+mkdir -p "$BUNDLE/Contents/Frameworks"
+ln "$CASE/arm64" "$BUNDLE/Contents/Frameworks/binary"
+HASH="$(shasum -a 256 "$CASE/arm64" | awk '{print $1}')"
+if /usr/bin/osascript -l JavaScript "$ROOT/scripts/macos-integrity.js" "$BUNDLE/Contents/Frameworks/binary" "$OLD" "$NEW" "$BUNDLE" "$CASE/arm64" "$HASH" >/dev/null 2>&1; then exit 1; fi
+[ "$(shasum -a 256 "$CASE/arm64" | awk '{print $1}')" = "$HASH" ]
 printf '[PASS] Apple Silicon/Intel/Universal 内嵌校验更新；未知版本、损坏和截断不写文件；未关闭完整性验证\n'

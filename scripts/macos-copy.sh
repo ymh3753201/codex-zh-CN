@@ -21,7 +21,7 @@ copy_paths_confined() {
 }
 
 copy_signature() {
-    [ "${CODEX_ZH_TESTING:-0}" != 1 ] || {
+    [ "${CODEX_ZH_TESTING:-0}" != 1 ] || [ "${CODEX_ZH_TEST_REAL_SIGNING:-0}" = 1 ] || {
         [ "${CODEX_ZH_TEST_FAIL_STAGE:-}" != copy-signature ]
         return
     }
@@ -105,7 +105,7 @@ prepare_copy() {
     done
     STAGE="sign-copy"
     copy_paths_confined || return 1
-    if [ "${CODEX_ZH_TESTING:-0}" != 1 ]; then
+    if [ "${CODEX_ZH_TESTING:-0}" != 1 ] || [ "${CODEX_ZH_TEST_REAL_SIGNING:-0}" = 1 ]; then
         copy_framework="$COPY_PATH/Contents/Frameworks/Codex Framework.framework"
         source_framework="$APP_PATH/Contents/Frameworks/Codex Framework.framework/Versions/Current/Codex Framework"
         /usr/bin/osascript -l JavaScript "$SCRIPT_DIR/macos-integrity.js" "$copy_framework/Versions/Current/Codex Framework" "$source_header_hash" "$(json_get "$patch_result" headerSha256)" "$COPY_PATH" "$source_framework" "$(copy_hash "$source_framework")" >> "$LOG_FILE" 2>&1 || {

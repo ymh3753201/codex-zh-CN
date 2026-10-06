@@ -3,7 +3,7 @@
 预览工具包：`codex-zh-CN-macOS-v0.2.0-preview.1.zip`
 
 ```text
-c906138727525b08a238548a9f6c93a9cbc1f1401e69bfbe74b099e9dbfe5d9f  codex-zh-CN-macOS-v0.2.0-preview.1.zip
+a1304cf2bea3f0e81726f749f61f93c81897609eff91b2d754e5640e1b3c889e  codex-zh-CN-macOS-v0.2.0-preview.1.zip
 ```
 
 该 ZIP 由 `scripts/package-macos.sh` 以固定时间戳和排序生成。Git 仓库不提交 ZIP；GitHub Actions 会重新生成 ZIP 和同名 `.sha256` 文件并作为 `codex-zh-CN-macOS-preview` 构建产物上传。
