@@ -10,7 +10,7 @@ require_text() { LC_ALL=C grep -F -q -- "$2" "$1" || fail "$3"; }
 
 [ -f "$PROMPT" ] || fail "缺少学员通用提示词"
 require_text "$PROMPT" 'https://github.com/ymh3753201/codex-zh-CN' "提示词缺少官方仓库地址"
-require_text "$PROMPT" '900ba81d5201203b0fe512303bcd91fe15917ad6' "提示词缺少已验证的固定提交"
+require_text "$PROMPT" '806d919cffc20d162da3c858396ae2f23c7cedef' "提示词缺少固定源码快照"
 require_text "$PROMPT" 'scripts\install_windows.ps1' "提示词缺少 Windows 安装入口"
 require_text "$PROMPT" 'scripts/install_macos.sh' "提示词缺少 macOS 安装入口"
 require_text "$PROMPT" '-NoRestart' "提示词缺少 Windows 不重启保护"

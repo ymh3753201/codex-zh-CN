@@ -6,7 +6,7 @@
 请你直接在我的电脑上完成 Codex Desktop 汉化，不要只给我教程或命令，请使用本机终端实际执行。
 
 工具官方仓库：https://github.com/ymh3753201/codex-zh-CN
-请固定下载已验证提交：900ba81d5201203b0fe512303bcd91fe15917ad6
+请固定下载这个源码快照：806d919cffc20d162da3c858396ae2f23c7cedef
 
 请完成以下任务：
 
