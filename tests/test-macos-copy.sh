@@ -133,15 +133,14 @@ assert "$(sha "$DATA/conversation-sentinel")" "$PRIVATE" '对话等无关文件�
 tool --mode copy --action install --no-restart >/dev/null
 tool --action open >/dev/null
 READY="$CASE/signal-ready"
-CODEX_ZH_TEST_COPY_WAIT_FOR_SIGNAL=1 CODEX_ZH_TEST_SIGNAL_READY="$READY" tool --action open >/dev/null 2>&1 &
+CODEX_ZH_TESTING=1 CODEX_ZH_TEST_ARCH="$(uname -m)" CODEX_ZH_TEST_COPY_WAIT_FOR_SIGNAL=1 CODEX_ZH_TEST_SIGNAL_READY="$READY" \
+    /bin/bash "$INSTALLER" --app "$APP" --codex-home "$DATA" --action open >/dev/null 2>&1 &
 SIGNAL_PID=$!
-# tool is a shell function; signal its actual installer child, not the CI shell.
+# Signal the installer directly, not a wrapper function or the CI shell.
 WAITED=0
 while [ ! -f "$READY" ] && [ "$WAITED" -lt 30 ]; do sleep 1; WAITED=$((WAITED + 1)); done
 [ -f "$READY" ] || exit 1
-CHILD_PID="$(pgrep -P "$SIGNAL_PID" | head -n 1)"
-[ -n "$CHILD_PID" ] || exit 1
-kill -TERM "$CHILD_PID"
+kill -TERM "$SIGNAL_PID"
 if wait "$SIGNAL_PID"; then exit 1; fi
 if tool --action open >/dev/null 2>&1; then printf '[FAIL] 中断副本再次成为启动目标\n' >&2; exit 1; fi
 
