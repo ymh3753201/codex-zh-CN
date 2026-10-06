@@ -17,6 +17,7 @@ APP_OVERRIDE=""
 CODEX_HOME_OVERRIDE=""
 STATE_ROOT_OVERRIDE=""
 UI_RESULT=""
+NATIVE_UI_ENGLISH_CONFIRMED=false
 
 STAGE="startup"
 FAILURE_MESSAGE=""
@@ -531,6 +532,7 @@ write_active_state() {
     json_insert_string "$state_tmp" locale "$CURRENT_LOCALE"
     json_insert_bool "$state_tmp" resourcesReady "$RESOURCES_READY"
     json_insert_bool "$state_tmp" uiLanguageVerified false
+    json_insert_bool "$state_tmp" nativeUiEnglishConfirmed "$NATIVE_UI_ENGLISH_CONFIRMED"
     if [ "$mode" = copy ]; then
         json_insert_string "$state_tmp" copySchemaVersion "3"
         json_insert_string "$state_tmp" copyPath "$COPY_PATH"
@@ -566,6 +568,9 @@ load_state() {
        [ "$(json_get "$ACTIVE_STATE_PATH" buildVersion)" != "$BUILD_VERSION" ]; then SOURCE_CHANGED=true; return 0; fi
     [ "$(json_get "$ACTIVE_STATE_PATH" toolVersion)" = "$TOOL_VERSION" ] || return 0
     STATE_VALID=true
+    if [ "$state_mode" = zh-CN ]; then
+        NATIVE_UI_ENGLISH_CONFIRMED="$(json_bool "$(json_get "$ACTIVE_STATE_PATH" nativeUiEnglishConfirmed)")"
+    fi
     if [ "$state_mode" = copy ]; then EFFECTIVE_MODE=copy; load_copy_state; fi
 }
 
@@ -616,6 +621,7 @@ inspect_all() {
     LANGUAGE_GATE_DETECTED=false; LANGUAGE_GATE_STATUS="unknown"; GATE_EVIDENCE="[]"; RESOURCE_CHECK_ERROR=""
     SETTINGS_PREPARED=false; INSTALLATION_READY=false; STATE_VALID=false; SOURCE_CHANGED=false
     EFFECTIVE_MODE=native; COPY_VALID=false; COPY_ACTIVATED=false; COPY_PATH=""
+    NATIVE_UI_ENGLISH_CONFIRMED=false
     ARCHITECTURE_COMPATIBLE=false; PROGRAM_RUNNING=false
     if ! find_app; then return 1; fi
     detect_architectures
@@ -649,6 +655,7 @@ calculate_next_action() {
     elif [ "$SOURCE_CHANGED" = true ]; then NEXT_ACTION="rerun-macos-installer-after-official-update"
     elif [ "$CURRENT_LOCALE" != "zh-CN" ]; then NEXT_ACTION="run-macos-installer"
     elif [ "$STATE_VALID" != true ]; then NEXT_ACTION="rerun-macos-installer"
+    elif [ "$UI_RESULT" = english ] && [ "$EFFECTIVE_MODE" = native ] && [ "$SETTINGS_PREPARED" = true ]; then NEXT_ACTION="run-explicit-copy-fallback-after-native-ui-failure"
     elif [ "$UI_RESULT" = english ]; then NEXT_ACTION="send-ui-failure-report-to-tutor"
     elif [ "$LANGUAGE_GATE_STATUS" = "unrecognized" ]; then NEXT_ACTION="send-unsupported-language-logic-report-to-tutor"
     elif [ "$INSTALLATION_READY" != true ]; then NEXT_ACTION="verify-chinese-ui-or-report-language-gate"
@@ -754,7 +761,9 @@ action_install() {
     inspect_all || true
     require_safe_app || return 1
     ok "官方应用签名、公证、架构和中文资源检查通过"
-    if [ "$INSTALL_MODE" = copy ] || { [ "$INSTALL_MODE" = auto ] && [ "$LANGUAGE_GATE_DETECTED" = true ]; }; then
+    # Static gate detection cannot prove this account needs a modified copy.
+    if [ "$INSTALL_MODE" = copy ] || { [ "$INSTALL_MODE" = auto ] &&
+        { [ "$NATIVE_UI_ENGLISH_CONFIRMED" = true ] || { [ "$EFFECTIVE_MODE" = copy ] && [ "$STATE_VALID" = true ]; }; }; }; then
         EFFECTIVE_MODE=copy
         if [ "$COPY_VALID" != true ] || [ "$STATE_VALID" != true ]; then
             info "正在准备独立中文兼容副本（保留官方程序）……"
@@ -766,6 +775,7 @@ action_install() {
         EFFECTIVE_MODE=native; COPY_PATH=""; COPY_VALID=false
     fi
     info "[2/4] 正在备份并写入官方中文语言设置……"
+    NATIVE_UI_ENGLISH_CONFIRMED=false
     write_locale_transaction "zh-CN" || return 1
     CURRENT_LOCALE="$(get_locale)"
     info "[3/4] 正在保存已验证状态……"
@@ -798,8 +808,13 @@ action_install() {
         info '请保存当前任务并手动退出 Codex，再双击“macOS-打开中文版.command”。'
     else
         info "[4/4] 正在按要求重新启动 Codex……"
-        quit_app || return 1
-        if [ "$EFFECTIVE_MODE" = copy ]; then open_copy || return 1; else open_app || return 1; fi
+        if [ "$EFFECTIVE_MODE" = copy ]; then
+            quit_copy || return 1
+            open_copy || return 1
+        else
+            quit_app || return 1
+            open_app || return 1
+        fi
         ok "已检测到 Codex 进程；界面中文仍需人工查看确认"
     fi
     classify_language_result
@@ -817,9 +832,17 @@ action_status() {
         UI_LANGUAGE_VERIFIED=true
         UI_VERIFICATION_STATUS="user-confirmed-chinese-this-check"
         INSTALLATION_READY=true
+        if [ "$EFFECTIVE_MODE" = native ]; then
+            NATIVE_UI_ENGLISH_CONFIRMED=false
+            write_active_state zh-CN || return 1
+        fi
     elif [ "$UI_RESULT" = english ]; then
         UI_VERIFICATION_STATUS="user-confirmed-english-this-check"
         INSTALLATION_READY=false
+        if [ "$EFFECTIVE_MODE" = native ] && [ "$SETTINGS_PREPARED" = true ]; then
+            NATIVE_UI_ENGLISH_CONFIRMED=true
+            write_active_state zh-CN || return 1
+        fi
     fi
     classify_language_result
     return 0
@@ -829,6 +852,7 @@ action_open() {
     info "正在重新校验官方程序、中文资源和安装状态……"
     inspect_all || true
     require_safe_app || return 1
+    STAGE="validate-install-state"
     if [ "$CURRENT_LOCALE" != "zh-CN" ] || [ "$STATE_VALID" != true ] || [ "$SOURCE_CHANGED" = true ]; then
         FAILURE_MESSAGE="中文安装状态无效或官方程序已更新，请先重新运行 macOS 一键安装。"
         return 1
@@ -846,9 +870,16 @@ action_open() {
 action_restore() {
     info "正在备份当前配置并恢复英文……"
     inspect_all || true
+    restore_from_copy=false
+    [ "$EFFECTIVE_MODE" != copy ] || restore_from_copy=true
+    if [ "$NO_RESTART" -ne 1 ] && [ "$restore_from_copy" = true ]; then
+        # Stop the managed copy before switching mode; never stop by process name.
+        quit_copy || return 1
+    fi
     write_locale_transaction "en-US" || return 1
     CURRENT_LOCALE="$(get_locale)"
     EFFECTIVE_MODE=native; COPY_ACTIVATED=false
+    NATIVE_UI_ENGLISH_CONFIRMED=false
     if [ -n "$APP_PATH" ]; then
         write_active_state "english" || {
             if rollback_transaction; then
@@ -905,6 +936,9 @@ classify_language_result() {
 handle_signal() {
     signal_name="$1"
     trap - HUP INT TERM
+    if [ "$STAGE" = launch-copy ]; then
+        block_failed_copy || warn "无法标记中断副本，请勿继续启动它并把报告交给助教"
+    fi
     STAGE="interrupted"
     FAILURE_MESSAGE="操作收到 $signal_name 信号并中断"
     LAST_RESULT="failed"

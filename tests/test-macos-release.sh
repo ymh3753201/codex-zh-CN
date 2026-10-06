@@ -33,12 +33,14 @@ RECORDED_HASH="$(grep -E '^[0-9a-f]{64}  codex-zh-CN-macOS-v' "$PROJECT_ROOT/doc
 PACKAGE_ROOT="$EXTRACT_DIR/$BASE"
 for relative in \
     'macOS-一键安装.command' \
+    'macOS-兼容汉化.command' \
     'macOS-检查状态.command' \
     'macOS-打开中文版.command' \
     'macOS-恢复英文.command' \
     'scripts/install_macos.sh' \
     'scripts/inspect-macos-asar.js' \
     'scripts/macos-copy.sh' \
+    'scripts/check-macos-copy-paths.js' \
     'scripts/macos-integrity.js' \
     'scripts/macos-local.entitlements.plist' \
     'resources/macos-release.json' \

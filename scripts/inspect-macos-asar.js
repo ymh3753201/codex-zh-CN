@@ -1,6 +1,28 @@
 // macOS system JavaScript for Automation. Never execute ASAR code.
 // Read-only by default; patch mode is limited to an independently verified copy.
 ObjC.import("Foundation");
+// Defense in depth: the writer itself proves a separate, source-bound managed copy.
+function assertManagedWrite(target, root, source, expectedHash) {
+    function physical(p) { return ObjC.unwrap($.NSString.stringWithString(p).stringByStandardizingPath.stringByResolvingSymlinksInPath); }
+    const r = physical(root), t = physical(target), s = physical(source);
+    if (!/\/copies\/copy\.[^/]+\/Codex中文版\.app$/.test(r) ||
+        t.indexOf(r + "/") !== 0 || s.indexOf(r + "/") === 0 || t === s ||
+        !/^[a-f0-9]{64}$/.test(expectedHash)) throw Error("写入目标不是独立受管副本");
+    const fm = $.NSFileManager.defaultManager;
+    const attributes = fm.attributesOfItemAtPathError(t, null);
+    if (!attributes || Number(ObjC.unwrap(attributes.objectForKey($.NSFileReferenceCount))) !== 1)
+        throw Error("拒绝修改链接到其他文件的目标");
+    function fileHash(path) {
+        const task = $.NSTask.alloc.init, output = $.NSPipe.pipe;
+        task.launchPath = "/usr/bin/shasum"; task.arguments = ["-a", "256", path]; task.standardOutput = output;
+        task.launch;
+        const result = ObjC.unwrap($.NSString.alloc.initWithDataEncoding(output.fileHandleForReading.readDataToEndOfFile, $.NSUTF8StringEncoding));
+        task.waitUntilExit;
+        if (task.terminationStatus !== 0 || !/^[a-f0-9]{64}/.test(result)) throw Error("副本来源校验失败");
+        return result.slice(0, 64);
+    }
+    if (fileHash(s) !== expectedHash || fileHash(t) !== expectedHash) throw Error("副本与绑定的官方源不一致");
+}
 
 function text(data) {
     const value = $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding);
@@ -25,12 +47,9 @@ function sha256(data) {
 }
 
 function run(argv) {
-    const patch = argv.length === 3 && argv[1] === "--patch-copy";
+    const patch = argv.length === 5 && argv[1] === "--patch-copy";
     if (argv.length !== 1 && !patch) throw Error("需要一个 app.asar 路径");
-    if (patch && (argv[0] === argv[2] ||
-        ObjC.unwrap($.NSString.stringWithString(argv[0]).stringByResolvingSymlinksInPath) ===
-        ObjC.unwrap($.NSString.stringWithString(argv[2]).stringByResolvingSymlinksInPath)))
-        throw Error("禁止修改官方 ASAR");
+    if (patch) assertManagedWrite(argv[0], argv[3], argv[2], argv[4]);
     const handle = $.NSFileHandle.fileHandleForReadingAtPath(argv[0]);
     if (!handle) throw Error("无法读取 app.asar");
     const fileSize = Number(handle.seekToEndOfFile);

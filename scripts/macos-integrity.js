@@ -1,8 +1,31 @@
 // System JXA. Refresh Electron's Mach-O ASAR digest, never disable validation.
 ObjC.import("Foundation");
+// Defense in depth: the writer itself proves a separate, source-bound managed copy.
+function assertManagedWrite(target, root, source, expectedHash) {
+    function physical(p) { return ObjC.unwrap($.NSString.stringWithString(p).stringByStandardizingPath.stringByResolvingSymlinksInPath); }
+    const r = physical(root), t = physical(target), s = physical(source);
+    if (!/\/copies\/copy\.[^/]+\/Codex中文版\.app$/.test(r) ||
+        t.indexOf(r + "/") !== 0 || s.indexOf(r + "/") === 0 || t === s ||
+        !/^[a-f0-9]{64}$/.test(expectedHash)) throw Error("写入目标不是独立受管副本");
+    const fm = $.NSFileManager.defaultManager;
+    const attributes = fm.attributesOfItemAtPathError(t, null);
+    if (!attributes || Number(ObjC.unwrap(attributes.objectForKey($.NSFileReferenceCount))) !== 1)
+        throw Error("拒绝修改链接到其他文件的目标");
+    function fileHash(path) {
+        const task = $.NSTask.alloc.init, output = $.NSPipe.pipe;
+        task.launchPath = "/usr/bin/shasum"; task.arguments = ["-a", "256", path]; task.standardOutput = output;
+        task.launch;
+        const result = ObjC.unwrap($.NSString.alloc.initWithDataEncoding(output.fileHandleForReading.readDataToEndOfFile, $.NSUTF8StringEncoding));
+        task.waitUntilExit;
+        if (task.terminationStatus !== 0 || !/^[a-f0-9]{64}/.test(result)) throw Error("副本来源校验失败");
+        return result.slice(0, 64);
+    }
+    if (fileHash(s) !== expectedHash || fileHash(t) !== expectedHash) throw Error("副本与绑定的官方源不一致");
+}
 function run(argv) {
-    if (argv.length !== 3 || !/^[a-f0-9]{64}$/.test(argv[1]) || !/^[a-f0-9]{64}$/.test(argv[2]))
+    if (argv.length !== 6 || !/^[a-f0-9]{64}$/.test(argv[1]) || !/^[a-f0-9]{64}$/.test(argv[2]))
         throw Error("需要副本框架路径和原/新 ASAR 文件头哈希");
+    assertManagedWrite(argv[0], argv[3], argv[4], argv[5]);
     const handle = $.NSFileHandle.fileHandleForUpdatingAtPath(argv[0]);
     if (!handle) throw Error("副本框架不可写");
     const total = Number(handle.seekToEndOfFile);

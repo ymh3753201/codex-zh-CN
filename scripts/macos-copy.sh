@@ -14,6 +14,12 @@ EFFECTIVE_MODE="native"
 
 copy_hash() { /usr/bin/shasum -a 256 "$1" 2>/dev/null | /usr/bin/awk '{print $1}'; }
 
+copy_paths_confined() {
+    /usr/bin/osascript -l JavaScript "$SCRIPT_DIR/check-macos-copy-paths.js" "$COPY_PATH" >> "$LOG_FILE" 2>&1 || {
+        COPY_ERROR="副本包含越界链接、共享硬链接或损坏路径"; FAILURE_MESSAGE="$COPY_ERROR"; return 1;
+    }
+}
+
 copy_signature() {
     [ "${CODEX_ZH_TESTING:-0}" != 1 ] || {
         [ "${CODEX_ZH_TEST_FAIL_STAGE:-}" != copy-signature ]
@@ -37,6 +43,7 @@ validate_copy() {
     [ "$(dirname "$(dirname "$COPY_PATH")")" = "$STATE_ROOT/copies" ] || { COPY_ERROR="副本路径包含越界目录"; return 1; }
     [ ! -L "$STATE_ROOT/copies" ] && [ ! -L "$(dirname "$COPY_PATH")" ] && [ ! -L "$COPY_PATH" ] || return 1
     [ ! -f "$(dirname "$COPY_PATH")/launch-failed" ] || { COPY_ERROR="这个副本曾启动失败，请重新安装；失败副本不会作为启动目标"; return 1; }
+    copy_paths_confined || return 1
     [ -f "$COPY_PATH/Contents/MacOS/$(plist_value "$COPY_PATH/Contents/Info.plist" CFBundleExecutable)" ] || return 1
     [ "$(copy_hash "$COPY_PATH/Contents/Resources/app.asar")" = "$COPY_ASAR_HASH" ] || { COPY_ERROR="副本资源缺失或已改变"; return 1; }
     [ "$(copy_hash "$COPY_PATH/Contents/Info.plist")" = "$COPY_INFO_HASH" ] || { COPY_ERROR="副本配置缺失或已改变"; return 1; }
@@ -74,11 +81,12 @@ prepare_copy() {
     /usr/bin/ditto "$APP_PATH" "$COPY_PATH" >> "$LOG_FILE" 2>&1 || { FAILURE_MESSAGE="应用复制失败，未完成副本不会成为启动目标"; return 1; }
     STAGE="verify-copy"
     /usr/bin/diff -qr "$APP_PATH" "$COPY_PATH" >> "$LOG_FILE" 2>&1 || { FAILURE_MESSAGE="副本与官方文件不一致，已停止"; return 1; }
+    copy_paths_confined || return 1
     [ ! "$COPY_PATH/Contents/Resources/app.asar" -ef "$APP_PATH/Contents/Resources/app.asar" ] || return 1
     STAGE="patch-copy-language"
     patch_result="$(mktemp "$STATE_ROOT/.patch-result.XXXXXX")" || return 1
     remember_temp "$patch_result"
-    /usr/bin/osascript -l JavaScript "$SCRIPT_DIR/inspect-macos-asar.js" "$COPY_PATH/Contents/Resources/app.asar" --patch-copy "$APP_PATH/Contents/Resources/app.asar" > "$patch_result" 2>> "$LOG_FILE" || {
+    /usr/bin/osascript -l JavaScript "$SCRIPT_DIR/inspect-macos-asar.js" "$COPY_PATH/Contents/Resources/app.asar" --patch-copy "$APP_PATH/Contents/Resources/app.asar" "$COPY_PATH" "$COPY_SOURCE_HASH" > "$patch_result" 2>> "$LOG_FILE" || {
         FAILURE_MESSAGE="副本中文兼容处理失败，官方应用未改动"; return 1;
     }
     copy_plist="$COPY_PATH/Contents/Info.plist"
@@ -96,9 +104,11 @@ prepare_copy() {
         /usr/libexec/PlistBuddy -c "Add :$update_key bool false" "$copy_plist" || return 1
     done
     STAGE="sign-copy"
+    copy_paths_confined || return 1
     if [ "${CODEX_ZH_TESTING:-0}" != 1 ]; then
         copy_framework="$COPY_PATH/Contents/Frameworks/Codex Framework.framework"
-        /usr/bin/osascript -l JavaScript "$SCRIPT_DIR/macos-integrity.js" "$copy_framework/Versions/Current/Codex Framework" "$source_header_hash" "$(json_get "$patch_result" headerSha256)" >> "$LOG_FILE" 2>&1 || {
+        source_framework="$APP_PATH/Contents/Frameworks/Codex Framework.framework/Versions/Current/Codex Framework"
+        /usr/bin/osascript -l JavaScript "$SCRIPT_DIR/macos-integrity.js" "$copy_framework/Versions/Current/Codex Framework" "$source_header_hash" "$(json_get "$patch_result" headerSha256)" "$COPY_PATH" "$source_framework" "$(copy_hash "$source_framework")" >> "$LOG_FILE" 2>&1 || {
             FAILURE_MESSAGE="新版 Electron 内嵌资源校验不支持，已停止且未激活副本"; return 1;
         }
         # Helpers load this framework too; mixed OpenAI/local signatures cannot do so.
@@ -147,6 +157,26 @@ copy_running() {
     /bin/ps -axo comm= | LC_ALL=C grep -F -x -q "$copy_executable_dir/$(plist_value "$COPY_PATH/Contents/Info.plist" CFBundleExecutable)"
 }
 
+quit_copy() {
+    STAGE="stop-running-copy"
+    validate_copy || { FAILURE_MESSAGE="无法安全识别要退出的副本，请保存任务并手动退出"; return 1; }
+    if [ "${CODEX_ZH_TESTING:-0}" = 1 ]; then
+        [ -z "${CODEX_ZH_TEST_QUIT_LOG:-}" ] || printf '%s\n' "$COPY_PATH" >> "$CODEX_ZH_TEST_QUIT_LOG"
+        return 0
+    fi
+    copy_running || return 0
+    copy_main="$copy_executable_dir/$(plist_value "$COPY_PATH/Contents/Info.plist" CFBundleExecutable)"
+    copy_pids="$(/bin/ps -axo pid=,comm= | /usr/bin/awk -v target="$copy_main" '{pid=$1; sub(/^[[:space:]]*[0-9]+[[:space:]]+/, ""); if ($0 == target) print pid}')"
+    for copy_pid in $copy_pids; do
+        # Recheck the exact executable immediately before sending a polite TERM.
+        [ "$( /bin/ps -p "$copy_pid" -o comm=)" = "$copy_main" ] || continue
+        /bin/kill -TERM "$copy_pid" || return 1
+    done
+    copy_waited=0
+    while copy_running && [ "$copy_waited" -lt 30 ]; do sleep 1; copy_waited=$((copy_waited + 1)); done
+    if copy_running; then FAILURE_MESSAGE="副本仍在运行，未强制结束；请保存任务并手动退出"; return 1; fi
+}
+
 open_copy() {
     STAGE="launch-copy"
     LAUNCH_ATTEMPTED=true
@@ -154,6 +184,10 @@ open_copy() {
     if [ "${CODEX_ZH_TESTING:-0}" = 1 ]; then
         [ "${CODEX_ZH_TEST_OPEN_FAIL:-0}" != 1 ] || { FAILURE_MESSAGE="测试：副本启动失败"; return 1; }
         [ -z "${CODEX_ZH_TEST_OPEN_LOG:-}" ] || printf '%s\n' "$COPY_PATH" >> "$CODEX_ZH_TEST_OPEN_LOG"
+        if [ "${CODEX_ZH_TEST_COPY_WAIT_FOR_SIGNAL:-0}" = 1 ]; then
+            [ -z "${CODEX_ZH_TEST_SIGNAL_READY:-}" ] || printf '%s\n' ready > "$CODEX_ZH_TEST_SIGNAL_READY"
+            while :; do sleep 1; done
+        fi
     elif ! copy_running; then
         # Distinct cache/single-instance lock; original CODEX_HOME keeps conversations.
         # No xattr removal, spctl bypass, forced quit or direct executable launch.
@@ -176,5 +210,5 @@ open_copy() {
     fi
     PROGRAM_RUNNING=true
     COPY_ACTIVATED=true
-    write_active_state copy || { COPY_ACTIVATED=false; FAILURE_MESSAGE="副本启动状态保存失败"; return 1; }
+    write_active_state copy || { STAGE="launch-copy"; COPY_ACTIVATED=false; FAILURE_MESSAGE="副本启动状态保存失败"; return 1; }
 }
