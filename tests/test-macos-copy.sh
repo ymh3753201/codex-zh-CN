@@ -25,6 +25,10 @@ tool() {
         # Fixtures contain no accounts or real user data; expose the failure stage in CI.
         fixture_report="$(find "$DATA/zh-cn-tool/macos/diagnostics" -name 'report-*.json' | sort | tail -n 1)"
         [ -z "$fixture_report" ] || /bin/cat "$fixture_report" >&2
+        if [ -n "$fixture_report" ]; then
+            fixture_log="$(/usr/bin/plutil -extract logPath raw -o - "$fixture_report")"
+            case "$fixture_log" in "$CASE"/*) /bin/cat "$fixture_log" >&2 ;; esac
+        fi
         return "$fixture_status"
     fi
 }

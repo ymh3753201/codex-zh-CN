@@ -5,11 +5,11 @@ function run(argv) {
     function physical(p) { return ObjC.unwrap($.NSString.stringWithString(p).stringByStandardizingPath.stringByResolvingSymlinksInPath); }
     const root = physical(argv[0]), fm = $.NSFileManager.defaultManager;
     if (!/\/copies\/copy\.[^/]+\/Codex中文版\.app$/.test(root)) throw Error("不是受管副本根");
-    const enumeration = fm.enumeratorAtPath(root);
-    if (!enumeration) throw Error("无法遍历副本");
-    let entry;
-    while ((entry = enumeration.nextObject)) {
-        const p = physical(root + "/" + ObjC.unwrap(entry));
+    // Deep unwrap avoids treating an Objective-C nil sentinel as a JS object.
+    const entries = ObjC.deepUnwrap(fm.subpathsAtPath(root));
+    if (!Array.isArray(entries)) throw Error("无法遍历副本");
+    for (const entry of entries) {
+        const p = physical(root + "/" + entry);
         if (p.indexOf(root + "/") !== 0) throw Error("副本包含越界链接，未修改文件");
         const attrs = fm.attributesOfItemAtPathError(p, null);
         if (!attrs) throw Error("副本包含损坏链接或缺失目标");

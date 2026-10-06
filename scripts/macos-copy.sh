@@ -1,4 +1,7 @@
 # Sourced by install_macos.sh; macOS system tools only.
+# shellcheck shell=bash
+# Shared state is consumed by the sourcing installer and its reports.
+# shellcheck disable=SC2034
 COPY_PATH=""
 COPY_VALID=false
 COPY_ACTIVATED=false

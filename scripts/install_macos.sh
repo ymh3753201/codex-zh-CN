@@ -7,6 +7,7 @@ set -u
 
 TOOL_VERSION="0.2.0-preview.1"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+# shellcheck source=macos-copy.sh
 source "$SCRIPT_DIR/macos-copy.sh" || exit 1
 BUNDLE_ID="com.openai.codex"
 EXPECTED_TEAM_ID="2DC432GLL2"
@@ -767,6 +768,7 @@ action_install() {
         { [ "$NATIVE_UI_ENGLISH_CONFIRMED" = true ] || { [ "$EFFECTIVE_MODE" = copy ] && [ "$STATE_VALID" = true ]; }; }; }; then
         EFFECTIVE_MODE=copy
         if [ "$COPY_VALID" != true ] || [ "$STATE_VALID" != true ]; then
+            STATE_VALID=false
             info "正在准备独立中文兼容副本（保留官方程序）……"
             prepare_copy || return 1
         else

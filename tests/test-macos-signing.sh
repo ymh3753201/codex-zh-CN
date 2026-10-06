@@ -40,7 +40,11 @@ sha() { shasum -a 256 "$1" | awk '{print $1}'; }
 SOURCE_ASAR="$(sha "$APP/Contents/Resources/app.asar")"
 SOURCE_FRAMEWORK="$(sha "$VERSION/Codex Framework")"
 SOURCE_INFO="$(sha "$APP/Contents/Info.plist")"
-CODEX_ZH_TESTING=1 CODEX_ZH_TEST_REAL_SIGNING=1 CODEX_ZH_TEST_ARCH="$(uname -m)" /bin/bash "$ROOT/scripts/install_macos.sh" --mode copy --app "$APP" --codex-home "$DATA" --action install --no-restart >/dev/null
+if ! CODEX_ZH_TESTING=1 CODEX_ZH_TEST_REAL_SIGNING=1 CODEX_ZH_TEST_ARCH="$(uname -m)" /bin/bash "$ROOT/scripts/install_macos.sh" --mode copy --app "$APP" --codex-home "$DATA" --action install --no-restart >/dev/null; then
+    # Only synthetic fixture logs, never a user's installation or account.
+    find "$DATA/zh-cn-tool/macos/logs" -name '*.log' -exec /bin/cat {} \;
+    exit 1
+fi
 STATE="$DATA/zh-cn-tool/macos/active-state.json"
 COPY="$(/usr/bin/plutil -extract copyPath raw -o - "$STATE")"
 /usr/bin/codesign --verify --deep --strict "$COPY"
