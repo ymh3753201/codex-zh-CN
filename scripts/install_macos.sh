@@ -576,6 +576,7 @@ load_state() {
 }
 
 is_program_running() {
+    if [ "${CODEX_ZH_TESTING:-0}" = 1 ] && [ "${CODEX_ZH_TEST_OFFICIAL_RUNNING:-0}" = 1 ]; then return 0; fi
     [ -n "$APP_EXECUTABLE" ] || return 1
     /bin/ps -axo comm= 2>/dev/null | LC_ALL=C grep -F -x -q "$APP_EXECUTABLE"
 }

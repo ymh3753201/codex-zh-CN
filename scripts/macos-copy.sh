@@ -181,9 +181,14 @@ quit_copy() {
 }
 
 open_copy() {
+    STAGE="launch-copy-preflight"
+    validate_copy || { FAILURE_MESSAGE="副本启动前校验失败：$COPY_ERROR"; return 1; }
+    if is_program_running; then
+        FAILURE_MESSAGE="官方 Codex 仍在运行。为避免同时使用同一份对话数据，请先保存任务并手动退出官方程序，再打开中文版；工具未关闭它。"
+        return 1
+    fi
     STAGE="launch-copy"
     LAUNCH_ATTEMPTED=true
-    validate_copy || { FAILURE_MESSAGE="副本启动前校验失败：$COPY_ERROR"; return 1; }
     if [ "${CODEX_ZH_TESTING:-0}" = 1 ]; then
         [ "${CODEX_ZH_TEST_OPEN_FAIL:-0}" != 1 ] || { FAILURE_MESSAGE="测试：副本启动失败"; return 1; }
         [ -z "${CODEX_ZH_TEST_OPEN_LOG:-}" ] || printf '%s\n' "$COPY_PATH" >> "$CODEX_ZH_TEST_OPEN_LOG"

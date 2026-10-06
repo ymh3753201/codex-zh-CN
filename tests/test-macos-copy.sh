@@ -66,6 +66,9 @@ JS
 tool --mode copy --action install --no-restart >/dev/null
 assert "$(value "$STATE" copyPath)" "$COPY" '重复安装应复用完整副本'
 OPEN_LOG="$CASE/open-log"
+if CODEX_ZH_TEST_OFFICIAL_RUNNING=1 CODEX_ZH_TEST_OPEN_LOG="$OPEN_LOG" tool --action open >/dev/null 2>&1; then exit 1; fi
+[ ! -f "$OPEN_LOG" ]
+assert "$(value "$STATE" copyActivated)" false '官方正在运行时不得启动副本或结束官方任务'
 CODEX_ZH_TEST_OPEN_LOG="$OPEN_LOG" tool --action open >/dev/null
 CODEX_ZH_TEST_OPEN_LOG="$OPEN_LOG" tool --action open >/dev/null
 assert "$(value "$STATE" copyActivated)" true '实际启动后才激活'
