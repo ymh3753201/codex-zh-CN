@@ -24,9 +24,13 @@ macOS-打开中文版.command
 macOS-恢复英文.command
 scripts/install_macos.sh
 scripts/inspect-macos-asar.js
+scripts/macos-copy.sh
+scripts/macos-integrity.js
+scripts/macos-local.entitlements.plist
 resources/macos-release.json
 docs/macOS零基础安装教程.md
 docs/macOS语言开关反馈审查-2026-10-04.md
+docs/macOS兼容副本实测-2026-10-06.md
 LICENSE
 "
 

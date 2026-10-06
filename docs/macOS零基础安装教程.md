@@ -1,102 +1,74 @@
-# macOS 零基础安装教程（预览版）
+# macOS 零基础安装教程（0.2.0-preview.1）
 
-这套工具使用 Codex Desktop 自带的官方简体中文资源。它不会修改 `/Applications` 中的官方程序，不会复制或删除对话，也不会关闭 macOS 的安全保护。
+这个非官方工具使用 Codex 自带的中文词条，保留官方程序、对话和其他配置。不需要 Node.js、Python 或 Homebrew，不关闭系统安全保护。
 
-当前 macOS 工具版本是 `0.1.0-preview.3`。官方主界面可能还受远程翻译开关控制：即使设置中已选择简体中文，页面也可能仍为英文。工具会报告这个限制；仅写入中文设置不能算汉化成功。
+## 三步使用
 
-## 安装前先看
+1. 完整解压 codex-zh-CN-macOS-v0.2.0-preview.1.zip，双击「macOS-一键安装.command」。不要只拖出一个文件。
+2. 等待「安装准备完成」。默认不重启；先保存正在运行的任务，再双击「macOS-打开中文版.command」。
+3. 亲眼检查菜单和主界面。两处都中文，才算汉化完成。原来的官方图标仍打开官方版本；以后从工具的「打开中文版」入口启动。
 
-- 支持目标：macOS 13 或更高版本的官方 Codex Desktop。
-- 官方应用在部分版本中显示为 `ChatGPT.app`，但内部包标识仍是 `com.openai.codex`，工具会自动识别。
-- 不需要安装 Node.js、Python、Homebrew 或 PowerShell。
-- 默认不会退出正在运行的 Codex，避免中断当前任务。
-- 安装只改 `~/.codex/config.toml` 中 `[desktop]` 下的 `localeOverride`，修改前会保存备份。其他配置原样保留。
+另有「macOS-检查状态.command」和「macOS-恢复英文.command」。恢复英文后，保存任务并退出中文版，再从原来的官方图标打开；副本、旧备份和对话都不会删除。
 
-## 学员安装步骤
+## 为什么需要独立副本
 
-1. 完整解压 `codex-zh-CN-macOS-v0.1.0-preview.3.zip`，不要只拖出一个文件。
-2. 双击 `macOS-一键安装.command`。
-3. 看到“语言设置准备完成”后，先保存 Codex 中正在执行的任务，再手动退出 Codex。若提示远程翻译开关未验证，这是“部分完成”，请继续查看实际界面。
-4. 双击 `macOS-打开中文版.command`。
-5. 亲眼检查顶部菜单和主界面。如果两处都是中文，再向助教报告“界面中文已确认”。如果菜单或主界面仍是英文，请把实际现象告诉 AI，并让它生成下文的验收失败报告。不要反复重装、改系统语言或清空对话。
+部分账号/版本即使选择简体中文，主界面仍不加载中文词条。默认工具只对已识别的翻译逻辑准备独立副本，并更新资源校验值，不改 /Applications 中的官方 App。
 
-如果 macOS 第一次不允许直接打开脚本，请在访达中按住 Control 点击该文件，选择“打开”。不要关闭“系统完整性保护”，也不要运行来源不明的 `sudo` 命令。
+副本采用「本地签名」（保证本机副本完整性），**不是 OpenAI 官方签名，也没有新的 Apple 公证**。必要的应用内加载权限仅限此副本，系统保护保持开启。副本不冒用 OpenAI 的推送、共享钥匙串或应用组权限。登录、通知及电脑控制功能仍需单独验收，可能需要重新登录或重新授予正常系统权限。
 
-## 四个简单入口
+macOS 如果拒绝启动，请保留报告交给助教；不要删除隔离属性、关闭 Gatekeeper/SIP 或强行直接运行可执行文件。脚本入口被拦截时，只按系统正常的「打开」提示处理，不绕过警告。需要公司管理员批准的机器应交给管理员。
 
-| 文件 | 用途 |
-| --- | --- |
-| `macOS-一键安装.command` | 检查官方应用、签名、公证、架构和中文资源；备份后写入中文设置；默认不重启 |
-| `macOS-检查状态.command` | 生成可交给助教的问题报告 |
-| `macOS-打开中文版.command` | 再次校验安装状态后，通过官方包标识打开 Codex |
-| `macOS-恢复英文.command` | 备份当前配置并恢复英文；默认不重启，也不删除旧备份 |
+如果官方 Codex 本来就已正常中文，**不需要创建副本**。AI 可选择 --mode native，只用官方设置。我们不会把「未发现翻译开关」当作中文已验收。
 
-## 让本机 Codex 中的 AI 执行
+## 让本机 AI 执行
 
-请让 AI 在工具包目录运行：
+在解压目录执行（路径含空格、中文也支持）：
 
-```bash
+~~~bash
 /bin/bash "scripts/install_macos.sh" --action install --no-restart
-```
+/bin/bash "scripts/install_macos.sh" --action status --json
+~~~
 
-安装命令退出码为 0 只代表该操作完成；报告中的 `lastResult=partial` 表示中文尚未验收。AI 不应因此宣布汉化成功。你保存任务并手动退出后，再运行：
+保存任务后打开：
 
-```bash
+~~~bash
 /bin/bash "scripts/install_macos.sh" --action open
-```
+~~~
 
-看到界面后，将实际结果告诉 AI。菜单或主界面仍英文时，运行：
+菜单或主界面仍英文时，记录失败：
 
-```bash
+~~~bash
 /bin/bash "scripts/install_macos.sh" --action status --ui-result english --json
-```
+~~~
 
-只有你确认菜单和主界面均为中文，才运行：
+只有你明确确认两处都中文，才记录成功：
 
-```bash
+~~~bash
 /bin/bash "scripts/install_macos.sh" --action status --ui-result chinese --json
-```
+~~~
 
-这些参数记录的是你本次亲眼看到的结果，不会修改程序、远程开关或系统安全设置，也不会永久代替今后的界面验收。
+不修改程序的官方设置模式：在安装命令加 --mode native。恢复英文：--action restore --no-restart。--restart 会退出官方 Codex，仅在保存所有任务并明确同意后使用。
 
-## 如何看状态报告
+## 报告怎么看
 
-报告保存在：
+报告默认位于 ~/.codex/zh-cn-tool/macos/diagnostics/，对应日志在 logs/，配置备份在 backups/，副本在 copies/。使用自定义 CODEX_HOME 时跟随该目录。
 
-```text
-~/.codex/zh-cn-tool/macos/diagnostics/
-```
+- resourcesReady：官方中文资源的实际字节和完整性记录通过。
+- settingsPrepared：语言设置和当前版本状态通过检查。
+- installationReady：兼容副本已完整准备且签名通过；**不等于已启动或界面已中文**。仅官方设置模式需要本次明确中文确认才能为真。
+- copyActivated：该副本曾通过启动检查。失败或中断的复制不会激活。
+- copySignatureKind / copyNotarizationAccepted：如实区分本地签名和公证，不能把官方公证当成副本公证。
+- programRunning：中文目标的进程存在，不会把官方 App 冒充中文副本。
+- uiLanguageVerified：默认为 false，只记录本次你明确确认的结果。
+- lastResult=partial：尚待界面确认；不是「工具完全正常、只怪上游」。
+- failureStage / failureMessage / nextAction：失败步骤、原因及下一步。
 
-重点字段：
+只向助教提供报告；日志可能有系统路径，请先脱敏。不要附密钥、账号、Cookie、完整配置、对话或私人截图。
 
-- `resourcesReady`：实际中文文件、主进程语言代码及其完整哈希和分块哈希是否通过校验，不只是发现文件名。
-- `settingsPrepared`：签名、公证、架构、语言配置和当前版本状态是否通过。
-- `languageGateDetected` / `languageGateStatus`：主界面是否依赖远程开关，或逻辑是否尚无法识别。
-- `remoteLanguageGateValue`：固定为 `unknown`。程序代码中的默认值不是该账号实际得到的服务端值。
-- `installationReady`：语言设置已准备好，而且本次已由你明确确认中文。仅凭未发现已知开关也不能证明运行时一定启用翻译；未实际确认时为 `false`。
-- `launchAttempted`：本次是否发送过启动请求。
-- `programRunning`：只说明发现进程，不代表页面已经中文。
-- `uiLanguageVerified`：默认 `false`；只在本次提供 `--ui-result chinese` 且安全前提通过时为 `true`。
-- `toolIssueSuspected` / `problemClassification`：实际仍英文会报告疑似工具兼容缺口，而不是自动认定“工具正常、只怪上游”。
-- `failureStage` / `failureMessage`：失败发生在哪一步及简短原因。
-- `nextAction`：建议的下一步操作。
+## 升级与故障
 
-报告只记录版本、阶段、校验结果和经过 `~` 隐去用户名的路径，不会复制配置内容、账号、密钥、Cookie 或对话。
+官方升级后重新运行安装，先检查新版官方签名和资源，再准备新副本。旧副本和备份保留，不会自动删除。重复安装同一版本会复核并复用完整副本。
 
-## 官方升级后怎么办
+空间不足、复制失败、资源损坏、签名失败或未知翻译逻辑，工具会停止并保留报告。未知版本不会猜测修改。系统拒绝副本启动时不会改系统保护；请把报告交给助教。
 
-官方升级会改变程序资源。`macOS-检查状态.command` 会把旧状态标为过期，并提示重新运行 `macOS-一键安装.command`。工具会重新检查新版签名和中文资源，不会继续使用未经检查的旧记录。
-
-## 恢复英文
-
-双击 `macOS-恢复英文.command`，然后保存任务并手动退出、重新打开 Codex。恢复操作不会卸载官方程序，不会删除对话，也不会删除历史备份。
-
-## 当前验证边界
-
-- 已在 Apple Silicon（arm64）机器、macOS `26.6.2`、Codex `26.930.31730`（构建 `12947`）检查真实应用：包内中文资源齐备，官方 Developer ID 签名有效，Apple 公证通过，实际主进程存在。
-- 已用隔离的临时配置完成安装、状态检查、恢复和失败回滚；没有改动本机正式 `~/.codex/config.toml`。
-- Intel（x86_64）架构判断已有自动测试，但尚未在真实 Intel Mac 上启动和查看界面。
-- 菜单、主界面中文、登录、已有任务可用和恢复英文后的视觉结果，仍需真实用户界面人工验收。
-- 自动测试不等于所有 macOS 和所有 Codex 版本都已验证。
-
-本次问题的审查依据与未解决范围见 [语言开关反馈审查](macOS语言开关反馈审查-2026-10-04.md)。当前版本没有在 macOS 上自动修改 App 副本来强行开启远程开关；这类副本需另行解决签名、公证和真实界面验收问题。
+当前实测和仍待验收范围见 [兼容副本实测记录](macOS兼容副本实测-2026-10-06.md)。这是预览版，不代表所有 Mac、登录与全部任务功能已验收。

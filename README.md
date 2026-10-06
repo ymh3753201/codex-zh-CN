@@ -4,18 +4,18 @@
 
 ## macOS 预览支持
 
-macOS 工具版本为 `0.1.0-preview.3`。它使用官方 `localeOverride` 语言设置，不复制或修改官方 `.app`，不破坏应用签名，也不要求 Node.js、Python 或 Homebrew。主界面可能还受远程翻译开关控制；设置写入成功并不保证界面中文，新版会明确报告“部分完成”及实际英文的验收失败。
+macOS 工具版本为 `0.2.0-preview.1`。使用官方中文资源和语言设置；遇到已识别的翻译开关时，在用户目录生成独立中文副本，官方 `.app` 不改动。普通学员不需要 Node.js、Python 或 Homebrew。副本使用本地签名，不冒充官方签名或 Apple 公证，也不关闭系统安全保护。如果官方设置已能正常中文，可使用 `--mode native`，不创建副本。
 
 解压 macOS 工具包后按顺序使用：
 
 1. `macOS-一键安装.command`：检查官方签名、Apple 公证、芯片架构和中文资源，备份后写入中文设置；默认不重启。
 2. 保存正在执行的任务并手动退出 Codex。
-3. `macOS-打开中文版.command`：重新校验后打开官方 Codex。
+3. `macOS-打开中文版.command`：重新校验后打开准备好的中文副本；成功启动后才激活副本。
 4. 亲眼确认菜单和主界面中文。脚本成功或进程存在不等于界面已经验收。
 
-另有 `macOS-检查状态.command` 和 `macOS-恢复英文.command`。详细步骤、AI 执行命令和报告说明见 [macOS 零基础安装教程](docs/macOS零基础安装教程.md)，本机验证证据与待验收范围见 [macOS 实测记录](docs/macOS实测记录-2026-10-03.md)，预览包校验值见 [macOS 工具包 SHA-256](docs/macOS工具包SHA256.md)。
+另有 `macOS-检查状态.command` 和 `macOS-恢复英文.command`。详细步骤见 [macOS 零基础安装教程](docs/macOS零基础安装教程.md)，当前测试证据与待验收范围见 [macOS 兼容副本实测](docs/macOS兼容副本实测-2026-10-06.md)，预览包校验值见 [macOS 工具包 SHA-256](docs/macOS工具包SHA256.md)。
 
-当前实测覆盖 Apple Silicon（arm64）、macOS `26.6.2`、Codex `26.930.31730`（构建 `12947`）的资源、签名、公证、架构和进程检查。Intel 只有自动化分支测试；真实 Intel 启动与界面验收、Apple Silicon 的完整中文界面/登录/已有任务/恢复视觉验收仍待完成。
+当前实测环境：Apple Silicon（arm64）、macOS `26.6.2`、Codex `26.930.51102`（构建 `13100`）。Intel/Universal 有模拟资源测试，但真实 Intel、其他 macOS/Codex 版本、账号登录和已有任务仍需分别验收。本预览版不代表全机型上线验收通过。
 
 ## Windows v0.3.5
 

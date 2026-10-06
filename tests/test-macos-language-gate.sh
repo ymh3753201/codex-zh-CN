@@ -15,7 +15,7 @@ printf '#!/bin/bash\nexit 0\n' > "$APP/Contents/MacOS/ChatGPT"
 chmod +x "$APP/Contents/MacOS/ChatGPT"
 node "$ROOT/tests/make-macos-fixture.mjs" "$APP/Contents/Resources/app.asar" gated
 OFFICIAL_HASH="$(shasum -a 256 "$APP/Contents/Resources/app.asar" | awk '{print $1}')"
-tool() { CODEX_ZH_TESTING=1 CODEX_ZH_TEST_ARCH="$(uname -m)" /bin/bash "$INSTALLER" --app "$APP" --codex-home "$DATA" "$@"; }
+tool() { CODEX_ZH_TESTING=1 CODEX_ZH_TEST_ARCH="$(uname -m)" /bin/bash "$INSTALLER" --mode native --app "$APP" --codex-home "$DATA" "$@"; }
 value() { /usr/bin/plutil -extract "$2" raw -o - "$1"; }
 report() { find "$DATA/zh-cn-tool/macos/diagnostics" -name 'report-*.json' | sort | tail -n 1; }
 assert() { [ "$1" = "$2" ] || { printf '[FAIL] %s: %s != %s\n' "$3" "$1" "$2" >&2; exit 1; }; }

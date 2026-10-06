@@ -38,9 +38,13 @@ for relative in \
     'macOS-恢复英文.command' \
     'scripts/install_macos.sh' \
     'scripts/inspect-macos-asar.js' \
+    'scripts/macos-copy.sh' \
+    'scripts/macos-integrity.js' \
+    'scripts/macos-local.entitlements.plist' \
     'resources/macos-release.json' \
     'docs/macOS零基础安装教程.md' \
     'docs/macOS语言开关反馈审查-2026-10-04.md' \
+    'docs/macOS兼容副本实测-2026-10-06.md' \
     'LICENSE'; do
     [ -f "$PACKAGE_ROOT/$relative" ] || fail "工具包缺少 $relative"
     [ "$(shasum -a 256 "$PACKAGE_ROOT/$relative" | awk '{print $1}')" = "$(shasum -a 256 "$PROJECT_ROOT/$relative" | awk '{print $1}')" ] || fail "工具包与源码不一致：$relative"
@@ -55,5 +59,6 @@ HELP_ERROR="$OUTPUT_DIR/help-error.txt"
 [ ! -s "$HELP_ERROR" ] || fail "帮助入口输出了隐藏错误"
 
 CODEX_ZH_MACOS_INSTALLER="$PACKAGE_ROOT/scripts/install_macos.sh" /bin/bash "$PROJECT_ROOT/tests/test-macos-language-gate.sh"
+CODEX_ZH_MACOS_INSTALLER="$PACKAGE_ROOT/scripts/install_macos.sh" /bin/bash "$PROJECT_ROOT/tests/test-macos-copy.sh"
 
 printf '[PASS] macOS 发布包、源码哈希、执行权限和 SHA-256 校验通过\n'

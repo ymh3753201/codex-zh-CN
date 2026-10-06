@@ -5,6 +5,7 @@ import vm from "node:vm";
 import assert from "node:assert/strict";
 
 const path = process.argv[2];
+const patched = process.argv.includes("--expect-local-copy");
 if (!path) throw Error("usage: node tests/test-macos-renderer-gate.mjs /path/to/app.asar");
 const fd = fs.openSync(path, "r");
 const read = (offset, size) => {
@@ -18,10 +19,10 @@ try {
   const assets = header.files.webview.files.assets.files;
   const candidates = Object.entries(assets).filter(([name]) => /^(app-initial|index)-.*\.js$/.test(name));
   const components = candidates.map(([name, entry]) => ({name, source: read(base + Number(entry.offset), entry.size).toString()}))
-    .filter(item => item.source.includes("enable_i18n"));
+    .filter(item => item.source.includes(patched ? "true/*zh-cn*/" : "enable_i18n"));
   assert.equal(components.length, 1, "renderer layout changed; review before continuing");
   const { name: asset, source } = components[0];
-  const gate = source.indexOf("enable_i18n"), start = source.lastIndexOf("function ", gate), end = source.indexOf("function ", gate);
+  const gate = source.indexOf(patched ? "true/*zh-cn*/" : "enable_i18n"), start = source.lastIndexOf("function ", gate), end = source.indexOf("function ", gate);
   assert(start >= 0 && end > start);
   const component = source.slice(start, end);
   const name = /^function ([\w$]+)/.exec(component)[1];
@@ -62,9 +63,9 @@ try {
     effects = [];
     const result = render({localeOverride:"zh-CN", children:"test"});
     assert.equal(result.locale, "zh-CN");
-    assert.equal(loads, enabled ? 1 : 0);
-    assert.equal(result.messages?.testMessage === "中文加载探针", enabled);
-    console.log(`[PASS] ${asset}: locale=zh-CN, enable_i18n=${enabled}, messages loaded=${enabled}`);
+    assert.equal(loads, patched || enabled ? 1 : 0);
+    assert.equal(result.messages?.testMessage === "中文加载探针", patched || enabled);
+    console.log(`[PASS] ${asset}: locale=zh-CN, remote enable_i18n=${enabled}, local-copy=${patched}, messages loaded=${patched || enabled}`);
   }
   await check(false);
   await check(true);

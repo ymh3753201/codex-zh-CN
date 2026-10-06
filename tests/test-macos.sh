@@ -52,7 +52,7 @@ run_tool() {
     CODEX_ZH_TESTING=1 \
     CODEX_ZH_TEST_ARCH="${CODEX_ZH_TEST_ARCH_VALUE:-$(uname -m)}" \
     CODEX_ZH_TEST_MACHINE_ARCH="${CODEX_ZH_TEST_MACHINE_VALUE:-$(uname -m)}" \
-    /bin/bash "$INSTALLER" --app "$app" --codex-home "$home" "$@"
+    /bin/bash "$INSTALLER" --mode native --app "$app" --codex-home "$home" "$@"
 }
 
 APP="$CASE_ROOT/ChatGPT 学员版.app"

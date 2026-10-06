@@ -167,6 +167,12 @@ jobs:
       - name: 远程翻译开关、界面反馈和资源字节校验
         run: /bin/bash tests/test-macos-language-gate.sh
 
+      - name: 独立中文副本与失败保护
+        run: /bin/bash tests/test-macos-copy.sh
+
+      - name: Mach-O 内嵌资源校验与双架构回归
+        run: /bin/bash tests/test-macos-integrity.sh
+
       - name: 生成 macOS 工具包和 SHA-256
         run: /bin/bash scripts/package-macos.sh
 

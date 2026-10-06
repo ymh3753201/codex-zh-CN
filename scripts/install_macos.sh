@@ -5,8 +5,9 @@
 
 set -u
 
-TOOL_VERSION="0.1.0-preview.3"
+TOOL_VERSION="0.2.0-preview.1"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+source "$SCRIPT_DIR/macos-copy.sh" || exit 1
 BUNDLE_ID="com.openai.codex"
 EXPECTED_TEAM_ID="2DC432GLL2"
 ACTION="install"
@@ -75,6 +76,8 @@ usage() {
   --no-restart       不退出当前 Codex（默认，适合让 Codex 中的 AI 执行）
   --restart          安装或恢复后退出并重新打开 Codex
   --json             状态检查只输出 JSON
+  --mode auto|native|copy
+                     自动选择（默认）；只用官方设置；独立中文兼容副本
   --ui-result english|chinese
                      检查状态时记录用户亲眼看到的菜单和主界面结果
   --app PATH         手动指定 Codex.app 或 ChatGPT.app
@@ -159,6 +162,9 @@ parse_args() {
             --no-restart) NO_RESTART=1; shift ;;
             --restart) NO_RESTART=0; shift ;;
             --json) JSON_OUTPUT=1; shift ;;
+            --mode)
+                [ "$#" -ge 2 ] || { printf '缺少 --mode 参数\n' >&2; exit 2; }
+                INSTALL_MODE="$2"; shift 2 ;;
             --ui-result)
                 [ "$#" -ge 2 ] || { printf '缺少 --ui-result 参数\n' >&2; exit 2; }
                 UI_RESULT="$2"; shift 2 ;;
@@ -176,6 +182,7 @@ parse_args() {
         esac
     done
     case "$ACTION" in install|status|open|restore) ;; *) printf '不支持的操作：%s\n' "$ACTION" >&2; exit 2 ;; esac
+    case "$INSTALL_MODE" in auto|native|copy) ;; *) printf '不支持的模式：%s\n' "$INSTALL_MODE" >&2; exit 2 ;; esac
     if [ -n "$UI_RESULT" ]; then
         case "$UI_RESULT" in english|chinese) ;; *) printf '界面结果只支持 english 或 chinese\n' >&2; exit 2 ;; esac
         [ "$ACTION" = status ] || { printf '--ui-result 只能与 --action status 一起使用\n' >&2; exit 2; }
@@ -406,8 +413,7 @@ write_locale_transaction() {
     state_original_existed=0
     if [ -f "$ACTIVE_STATE_PATH" ]; then
         state_original_existed=1
-        state_backup_path="$(mktemp "$STATE_ROOT/.active-state.rollback.XXXXXX")" || { FAILURE_MESSAGE="无法准备状态回滚文件"; return 1; }
-        remember_temp "$state_backup_path"
+        state_backup_path="$STATE_ROOT/backups/active-state.$(date '+%Y%m%d-%H%M%S')-$$.json.bak"
         /bin/cp -p -- "$ACTIVE_STATE_PATH" "$state_backup_path" || { FAILURE_MESSAGE="无法备份当前安装状态"; return 1; }
     fi
     LAST_STATE_BACKUP_PATH="$state_backup_path"
@@ -517,12 +523,27 @@ write_active_state() {
     json_insert_string "$state_tmp" codexVersion "$APP_VERSION"
     json_insert_string "$state_tmp" buildVersion "$BUILD_VERSION"
     json_insert_string "$state_tmp" appArchitectures "$APP_ARCHITECTURES"
-    json_insert_string "$state_tmp" asarSha256 "$(asar_sha256)"
+    if [ "$mode" = copy ]; then
+        json_insert_string "$state_tmp" asarSha256 "$COPY_SOURCE_HASH"
+    else
+        json_insert_string "$state_tmp" asarSha256 "$(asar_sha256)"
+    fi
     json_insert_string "$state_tmp" locale "$CURRENT_LOCALE"
     json_insert_bool "$state_tmp" resourcesReady "$RESOURCES_READY"
     json_insert_bool "$state_tmp" uiLanguageVerified false
+    if [ "$mode" = copy ]; then
+        json_insert_string "$state_tmp" copySchemaVersion "3"
+        json_insert_string "$state_tmp" copyPath "$COPY_PATH"
+        json_insert_string "$state_tmp" copyAsarSha256 "$COPY_ASAR_HASH"
+        json_insert_string "$state_tmp" copyInfoSha256 "$COPY_INFO_HASH"
+        json_insert_bool "$state_tmp" copyActivated "$COPY_ACTIVATED"
+    fi
     /usr/bin/plutil -convert json "$state_tmp" || return 1
     chmod 600 "$state_tmp" 2>/dev/null || true
+    if [ -f "$ACTIVE_STATE_PATH" ]; then
+        state_history="$(mktemp "$STATE_ROOT/backups/state-before.XXXXXX")" || return 1
+        /bin/cp -p -- "$ACTIVE_STATE_PATH" "$state_history" || return 1
+    fi
     /bin/mv -f -- "$state_tmp" "$ACTIVE_STATE_PATH"
 }
 
@@ -534,6 +555,7 @@ load_state() {
     state_app="$(json_get "$ACTIVE_STATE_PATH" appPath)"
     state_hash="$(json_get "$ACTIVE_STATE_PATH" asarSha256)"
     state_mode="$(json_get "$ACTIVE_STATE_PATH" mode)"
+    case "$state_mode" in zh-CN|copy|english) ;; *) warn "状态记录的安装模式损坏，将忽略并允许重新安装。"; return 0 ;; esac
     if [ "$state_bundle" != "$BUNDLE_ID" ] || [ -z "$state_app" ] || [ -z "$state_hash" ]; then
         warn "发现损坏或旧版状态记录，将忽略它；重新安装可安全替换。"
         return 0
@@ -544,6 +566,7 @@ load_state() {
        [ "$(json_get "$ACTIVE_STATE_PATH" buildVersion)" != "$BUILD_VERSION" ]; then SOURCE_CHANGED=true; return 0; fi
     [ "$(json_get "$ACTIVE_STATE_PATH" toolVersion)" = "$TOOL_VERSION" ] || return 0
     STATE_VALID=true
+    if [ "$state_mode" = copy ]; then EFFECTIVE_MODE=copy; load_copy_state; fi
 }
 
 is_program_running() {
@@ -592,6 +615,7 @@ inspect_all() {
     NATIVE_MENU_ZH=false; WEBVIEW_ZH=false; LOCALE_OVERRIDE_SUPPORTED=false; NATIVE_INTL_SUPPORTED=false
     LANGUAGE_GATE_DETECTED=false; LANGUAGE_GATE_STATUS="unknown"; GATE_EVIDENCE="[]"; RESOURCE_CHECK_ERROR=""
     SETTINGS_PREPARED=false; INSTALLATION_READY=false; STATE_VALID=false; SOURCE_CHANGED=false
+    EFFECTIVE_MODE=native; COPY_VALID=false; COPY_ACTIVATED=false; COPY_PATH=""
     ARCHITECTURE_COMPATIBLE=false; PROGRAM_RUNNING=false
     if ! find_app; then return 1; fi
     detect_architectures
@@ -607,6 +631,11 @@ inspect_all() {
         SETTINGS_PREPARED=false
     fi
     INSTALLATION_READY=false
+    if [ "$EFFECTIVE_MODE" = copy ] && [ "$COPY_VALID" = true ] && [ "$SETTINGS_PREPARED" = true ]; then
+        INSTALLATION_READY=true
+        PROGRAM_RUNNING=false
+        copy_running && PROGRAM_RUNNING=true
+    fi
     # Neither finding a default nor failing to find a known gate proves runtime activation.
     # Only this check's explicit user confirmation can complete native-mode acceptance.
     return 0
@@ -666,6 +695,14 @@ write_report() {
     /usr/bin/plutil -insert languageGateEvidence -json "$GATE_EVIDENCE" "$report_tmp" || return 1
     json_insert_bool "$report_tmp" toolIssueSuspected "$TOOL_ISSUE_SUSPECTED"
     json_insert_string "$report_tmp" problemClassification "$PROBLEM_CLASSIFICATION"
+    json_insert_string "$report_tmp" mode "$EFFECTIVE_MODE"
+    json_insert_string "$report_tmp" copyPath "$(display_path "$COPY_PATH")"
+    json_insert_bool "$report_tmp" copyValid "$COPY_VALID"
+    json_insert_bool "$report_tmp" copyActivated "$COPY_ACTIVATED"
+    json_insert_string "$report_tmp" copySignatureKind "$COPY_SIGNATURE_KIND"
+    json_insert_bool "$report_tmp" copyNotarizationAccepted "$COPY_NOTARIZATION_ACCEPTED"
+    json_insert_bool "$report_tmp" copyQuarantined "$COPY_QUARANTINED"
+    json_insert_string "$report_tmp" copyError "$COPY_ERROR"
     json_insert_bool "$report_tmp" installationReady "$INSTALLATION_READY"
     json_insert_bool "$report_tmp" launchAttempted "$LAUNCH_ATTEMPTED"
     json_insert_bool "$report_tmp" programRunning "$PROGRAM_RUNNING"
@@ -693,6 +730,8 @@ show_summary() {
     printf '  语言设置准备完成：%s\n' "$SETTINGS_PREPARED"
     printf '  主界面翻译开关：%s（账号实际开关值未知）\n' "$LANGUAGE_GATE_STATUS"
     printf '  安装准备完成：%s\n' "$INSTALLATION_READY"
+    printf '  安装模式：%s；独立副本：%s\n' "$EFFECTIVE_MODE" "${COPY_PATH:-未使用}"
+    printf '  副本签名：%s（不是官方签名/公证）；副本已启动激活：%s\n' "$COPY_SIGNATURE_KIND" "$COPY_ACTIVATED"
     printf '  程序正在运行：%s（不等于界面已中文）\n' "$PROGRAM_RUNNING"
     printf '  界面中文已确认：%s（需学员人工查看）\n' "$UI_LANGUAGE_VERIFIED"
     if [ "$SETTINGS_PREPARED" = true ] && [ "$INSTALLATION_READY" != true ]; then
@@ -715,11 +754,24 @@ action_install() {
     inspect_all || true
     require_safe_app || return 1
     ok "官方应用签名、公证、架构和中文资源检查通过"
+    if [ "$INSTALL_MODE" = copy ] || { [ "$INSTALL_MODE" = auto ] && [ "$LANGUAGE_GATE_DETECTED" = true ]; }; then
+        EFFECTIVE_MODE=copy
+        if [ "$COPY_VALID" != true ] || [ "$STATE_VALID" != true ]; then
+            info "正在准备独立中文兼容副本（保留官方程序）……"
+            prepare_copy || return 1
+        else
+            ok "已验证现有中文副本，重复安装不再复制"
+        fi
+    else
+        EFFECTIVE_MODE=native; COPY_PATH=""; COPY_VALID=false
+    fi
     info "[2/4] 正在备份并写入官方中文语言设置……"
     write_locale_transaction "zh-CN" || return 1
     CURRENT_LOCALE="$(get_locale)"
     info "[3/4] 正在保存已验证状态……"
-    write_active_state "zh-CN" || {
+    install_state_mode=zh-CN
+    [ "$EFFECTIVE_MODE" != copy ] || install_state_mode=copy
+    write_active_state "$install_state_mode" || {
         if rollback_transaction; then
             FAILURE_MESSAGE="无法保存安装状态，语言配置已回滚，备份仍保留"
         else
@@ -747,7 +799,7 @@ action_install() {
     else
         info "[4/4] 正在按要求重新启动 Codex……"
         quit_app || return 1
-        open_app || return 1
+        if [ "$EFFECTIVE_MODE" = copy ]; then open_copy || return 1; else open_app || return 1; fi
         ok "已检测到 Codex 进程；界面中文仍需人工查看确认"
     fi
     classify_language_result
@@ -781,7 +833,11 @@ action_open() {
         FAILURE_MESSAGE="中文安装状态无效或官方程序已更新，请先重新运行 macOS 一键安装。"
         return 1
     fi
-    open_app || return 1
+    if [ "$EFFECTIVE_MODE" = copy ]; then
+        open_copy || return 1
+    else
+        open_app || return 1
+    fi
     ok "已检测到 Codex 进程；请人工确认菜单和主界面是否为中文"
     classify_language_result
     return 0
@@ -792,6 +848,7 @@ action_restore() {
     inspect_all || true
     write_locale_transaction "en-US" || return 1
     CURRENT_LOCALE="$(get_locale)"
+    EFFECTIVE_MODE=native; COPY_ACTIVATED=false
     if [ -n "$APP_PATH" ]; then
         write_active_state "english" || {
             if rollback_transaction; then
@@ -830,11 +887,13 @@ classify_language_result() {
         else
             PROBLEM_CLASSIFICATION="installation-or-environment-needs-check"
         fi
-    elif [ "$SETTINGS_PREPARED" = true ] && [ "$INSTALLATION_READY" != true ]; then
+    elif [ "$SETTINGS_PREPARED" = true ] && [ "$UI_LANGUAGE_VERIFIED" != true ]; then
         LAST_RESULT="partial"
-        STAGE="verify-language-gate"
-        FAILURE_MESSAGE="中文语言设置已准备好；主界面翻译生效条件尚未验证，汉化未完成。"
-        if [ "$LANGUAGE_GATE_DETECTED" = true ] || [ "$LANGUAGE_GATE_STATUS" = unrecognized ]; then
+        STAGE="ui-language-verification"
+        FAILURE_MESSAGE="安装已准备；请打开中文版并亲眼确认菜单和主界面，尚未完成界面验收。"
+        if [ "$EFFECTIVE_MODE" = copy ] && [ "$COPY_VALID" = true ]; then
+            PROBLEM_CLASSIFICATION="visual-verification-required"
+        elif [ "$LANGUAGE_GATE_DETECTED" = true ] || [ "$LANGUAGE_GATE_STATUS" = unrecognized ]; then
             TOOL_ISSUE_SUSPECTED=true
             PROBLEM_CLASSIFICATION="language-gate-not-covered-by-tool"
         else
@@ -882,12 +941,15 @@ main() {
     fi
     if [ "$result" -ne 0 ]; then
         LAST_RESULT="failed"
+        if [ "$STAGE" = launch-copy ]; then block_failed_copy || warn "无法标记失败副本，请将报告交给助教，勿继续启动这个副本"; fi
         [ -n "$FAILURE_MESSAGE" ] || FAILURE_MESSAGE="操作在 $STAGE 阶段失败"
         warn "$FAILURE_MESSAGE"
     fi
     if [ -n "$APP_PATH" ]; then
         CURRENT_LOCALE="$(get_locale)"
-        if is_program_running; then PROGRAM_RUNNING=true; fi
+        if [ "$EFFECTIVE_MODE" = copy ]; then
+            if copy_running; then PROGRAM_RUNNING=true; fi
+        elif is_program_running; then PROGRAM_RUNNING=true; fi
     fi
     if [ "$REPORTING_READY" != true ]; then
         printf '无法创建任何问题报告，请把上面的错误原文交给助教。\n' >&2
