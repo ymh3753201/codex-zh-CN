@@ -196,11 +196,20 @@ CODEX_ZH_TEST_WAIT_FOR_SIGNAL=1 \
 /bin/bash "$INSTALLER" --app "$APP" --codex-home "$HOME_SIGNAL" --action install --no-restart > "$SIGNAL_OUTPUT" 2>&1 &
 SIGNAL_PID=$!
 signal_ready=0
-for _ in 1 2 3 4 5 6 7 8 9 10; do
+# Intel runners can take more than two seconds to complete package/resource checks.
+# Wait for the transaction itself, not a fixed startup delay; fail within 30 seconds.
+signal_deadline=$((SECONDS + 30))
+while [ "$SECONDS" -lt "$signal_deadline" ]; do
     if grep -F -q 'localeOverride = "zh-CN"' "$HOME_SIGNAL/config.toml" 2>/dev/null; then signal_ready=1; break; fi
+    kill -0 "$SIGNAL_PID" 2>/dev/null || break
     sleep 0.2
 done
-[ "$signal_ready" -eq 1 ] || { kill -TERM "$SIGNAL_PID" 2>/dev/null || true; wait "$SIGNAL_PID" 2>/dev/null || true; fail "中断测试未进入配置事务"; }
+[ "$signal_ready" -eq 1 ] || {
+    kill -TERM "$SIGNAL_PID" 2>/dev/null || true
+    wait "$SIGNAL_PID" 2>/dev/null || true
+    /bin/cat "$SIGNAL_OUTPUT" >&2
+    fail "中断测试未进入配置事务（进程提前退出或等待超过 30 秒）"
+}
 kill -TERM "$SIGNAL_PID"
 if wait "$SIGNAL_PID"; then fail "终止信号被错误当成成功"; fi
 assert_eq "$(shasum -a 256 "$HOME_SIGNAL/config.toml" | awk '{print $1}')" "$SIGNAL_HASH" "终止信号后没有回滚配置"
