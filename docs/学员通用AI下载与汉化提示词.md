@@ -15,6 +15,8 @@
 
 1. 自动识别 Windows 或 macOS，从上面的固定 ZIP 地址下载到新的独立目录，核对 SHA-256、完整解压并检查入口。不要改用 main、latest 或旧版 v0.3.4；旧包没有 macOS 入口。哈希不符或入口缺失时，先报告“工具下载版本或完整性检查失败”，只允许重新下载一次；仍失败就停止，不修改配置，不用手动设置中文冒充工具安装。不要让我另外安装 Git、Node.js、Python、Homebrew 或 PowerShell 7。若使用助教网盘包，请核对它对应的校验值，不能套用另一个 ZIP 的哈希。
 
+macOS 在终端解压时使用系统自带 `/usr/bin/ditto -x -k "<下载的ZIP>" "<新的解压目录>"`，避免旧版 unzip 造成中文文件名乱码；不要通过改名或拼凑脚本绕过完整性检查。
+
 2. 使用与系统对应的工具自带入口安装，默认不关闭或重启当前 Codex：
    - macOS 先做工具包预检：`/bin/bash "<工具目录>/scripts/check-macos-package.sh"`。预检通过才安装；工具未安装时应如实报告，不能仅凭中文配置声称完成。
    - Windows：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File "<工具目录>\scripts\install_windows.ps1" -NoRestart`

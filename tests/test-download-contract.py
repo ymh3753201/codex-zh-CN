@@ -4,7 +4,9 @@ import io
 import json
 from pathlib import Path, PurePosixPath
 import re
+import subprocess
 import sys
+import tempfile
 import urllib.request
 import zipfile
 
@@ -85,6 +87,36 @@ def regressions(meta):
         raise AssertionError("main must never replace the pinned snapshot")
 
 
+def check_macos_extraction(data, meta):
+    if sys.platform != "darwin":
+        return
+    # Tool files only: the checker never discovers/starts an App or touches config.
+    with tempfile.TemporaryDirectory(prefix="codex-zh-download-") as temporary:
+        temporary = Path(temporary)
+        archive_path = temporary / "汉化工具.zip"
+        destination = temporary / "中文 & (解压目录)"
+        archive_path.write_bytes(data)
+        subprocess.run(["/usr/bin/ditto", "-x", "-k", str(archive_path), str(destination)],
+                       check=True, capture_output=True, timeout=60)
+        package = destination / f"codex-zh-CN-{meta['commit']}"
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            prefix = f"codex-zh-CN-{meta['commit']}/"
+            manifest = archive.read(prefix + "resources/macos-package-files.txt").decode("utf-8")
+            for relative in manifest.splitlines():
+                target = package / relative
+                assert target.is_file() and not target.is_symlink(), f"bad extracted file: {relative}"
+                assert target.read_bytes() == archive.read(prefix + relative), f"extraction changed: {relative}"
+        result = subprocess.run(["/bin/bash", str(package / "scripts/check-macos-package.sh"),
+                                 "--expected-version", meta["macOSToolVersion"]],
+                                check=True, capture_output=True, text=True, timeout=60)
+        report = json.loads(result.stdout)
+        assert report["toolPackageReady"] is True
+        for field in ("resourcesReady", "settingsPrepared", "installationReady", "launchAttempted",
+                      "programRunning", "uiLanguageVerified"):
+            assert report[field] is False, f"package preflight must not claim {field}"
+    print("[PASS] macOS builtin ditto: Chinese paths, extracted bytes and package-only preflight")
+
+
 def main():
     meta = json.loads(METADATA.read_text(encoding="utf-8"))
     regressions(meta)
@@ -99,6 +131,7 @@ def main():
     else:
         raise ValueError("usage: test-download-contract.py [--archive source.zip]")
     mac, windows = validate(data, meta)
+    check_macos_extraction(data, meta)
     # Wrong published checksum must fail as well as a structurally wrong package.
     try:
         validate(data, {**meta, "archiveSha256": "0" * 64})
