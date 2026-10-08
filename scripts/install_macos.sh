@@ -5,8 +5,16 @@
 
 set -u
 
-TOOL_VERSION="0.2.0-preview.1"
+TOOL_VERSION="0.2.0-preview.2"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+if [ ! -f "$SCRIPT_DIR/check-macos-package.sh" ]; then
+    printf '%s\n' '{"toolPackageReady":false,"toolIssueSuspected":true,"failureStage":"tool-package-check","lastResult":"failed","failureMessage":"缺少工具包检查入口，请重新下载完整 macOS 工具包","installationReady":false,"launchAttempted":false,"uiLanguageVerified":false}'
+    exit 1
+fi
+if ! PACKAGE_CHECK="$(/bin/bash "$SCRIPT_DIR/check-macos-package.sh" --root "$SCRIPT_DIR/.." --expected-version "$TOOL_VERSION")"; then
+    printf '%s\n' "$PACKAGE_CHECK"
+    exit 1
+fi
 # shellcheck source=macos-copy.sh
 source "$SCRIPT_DIR/macos-copy.sh" || exit 1
 BUNDLE_ID="com.openai.codex"
@@ -675,6 +683,7 @@ write_report() {
     report_tmp="$report_tmp_dir/report.json"
     /usr/bin/plutil -create xml1 "$report_tmp" || return 1
     json_insert_string "$report_tmp" toolVersion "$TOOL_VERSION"
+    json_insert_bool "$report_tmp" toolPackageReady true
     json_insert_string "$report_tmp" generatedAt "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
     json_insert_string "$report_tmp" lastResult "$report_result"
     report_stage="$STAGE"

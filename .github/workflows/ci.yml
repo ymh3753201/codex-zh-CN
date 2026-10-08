@@ -145,8 +145,16 @@ jobs:
           if-no-files-found: ignore
 
   verify-macos:
-    name: macOS 安装、恢复与工具包验证
-    runs-on: macos-latest
+    name: macOS 工具回归（${{ matrix.arch }}）
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            arch: arm64
+          - os: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     steps:
       - name: 检出代码
@@ -157,6 +165,10 @@ jobs:
           sw_vers
           uname -m
           /bin/bash --version | head -n 1
+          test "$(uname -m)" = "${{ matrix.arch }}"
+
+      - name: 旧下载版本、缺失入口和工具包预检
+        run: /bin/bash tests/test-macos-package.sh
 
       - name: 学员通用提示词完整性
         run: /bin/bash tests/test-student-prompt.sh
@@ -185,7 +197,7 @@ jobs:
       - name: 上传 macOS 工具包
         uses: actions/upload-artifact@v4
         with:
-          name: codex-zh-CN-macOS-preview
+          name: codex-zh-CN-macOS-preview-${{ matrix.arch }}
           path: |
             dist/codex-zh-CN-macOS-v*.zip
             dist/codex-zh-CN-macOS-v*.sha256

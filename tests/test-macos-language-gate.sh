@@ -8,7 +8,7 @@ APP="$CASE/中文 & (门控).app"
 DATA="$CASE/数据"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 /usr/bin/plutil -create xml1 "$APP/Contents/Info.plist"
-for pair in 'CFBundleIdentifier com.openai.codex' 'CFBundleExecutable ChatGPT' 'CFBundleShortVersionString 26.930.41038' 'CFBundleVersion 13022'; do
+for pair in 'CFBundleIdentifier com.openai.codex' 'CFBundleExecutable ChatGPT' 'CFBundleShortVersionString 26.1002.52244' 'CFBundleVersion 13536'; do
     /usr/bin/plutil -insert "${pair%% *}" -string "${pair#* }" "$APP/Contents/Info.plist"
 done
 printf '#!/bin/bash\nexit 0\n' > "$APP/Contents/MacOS/ChatGPT"
@@ -23,6 +23,8 @@ tool --action install --no-restart > "$CASE/install.log"
 REPORT="$(report)"
 assert "$(value "$REPORT" installationReady)" false '远程翻译开关未验证时不得声称安装准备完成'
 assert "$(value "$REPORT" settingsPrepared)" true '语言配置应该已准备好'
+assert "$(value "$REPORT" codexVersion)" 26.1002.52244 '新版 Codex 版本应保留'
+assert "$(value "$REPORT" buildVersion)" 13536 '新版 Codex 构建号应保留'
 assert "$(value "$REPORT" languageGateDetected)" true '必须发现主界面远程门控'
 assert "$(value "$REPORT" languageGateEvidence.0.defaultEnabled)" false '必须记录主界面默认值为 false'
 assert "$(value "$REPORT" languageGateEvidence.1.defaultEnabled)" true '设置页默认值不能被当成主界面默认值'
@@ -43,7 +45,7 @@ assert "$(value "$(report)" lastResult)" partial '检测到进程仍不等于汉
 assert "$(shasum -a 256 "$APP/Contents/Resources/app.asar" | awk '{print $1}')" "$OFFICIAL_HASH" '检查门控不应改变官方资源'
 
 # 同样的 ASAR，不同构建号：历史状态必须失效。
-/usr/bin/plutil -replace CFBundleVersion -string 13023 "$APP/Contents/Info.plist"
+/usr/bin/plutil -replace CFBundleVersion -string 13537 "$APP/Contents/Info.plist"
 tool --action status --json > "$CASE/updated.json"
 assert "$(value "$CASE/updated.json" officialAppUpdated)" true '构建号变化必须识别为官方升级'
 tool --action install --no-restart >/dev/null

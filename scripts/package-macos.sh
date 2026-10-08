@@ -17,38 +17,16 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
-FILES="
-macOS-一键安装.command
-macOS-兼容汉化.command
-macOS-检查状态.command
-macOS-打开中文版.command
-macOS-恢复英文.command
-scripts/install_macos.sh
-scripts/inspect-macos-asar.js
-scripts/macos-copy.sh
-scripts/check-macos-copy-paths.js
-scripts/macos-integrity.js
-scripts/macos-local.entitlements.plist
-resources/macos-release.json
-docs/macOS零基础安装教程.md
-docs/macOS语言开关反馈审查-2026-10-04.md
-docs/macOS兼容副本实测-2026-10-06.md
-LICENSE
-"
-
 mkdir -p -- "$OUTPUT_DIR" "$STAGE_ROOT"
-old_ifs="$IFS"
-IFS='
-'
-for relative in $FILES; do
-    [ -n "$relative" ] || continue
+/bin/bash "$PROJECT_ROOT/scripts/check-macos-package.sh" >/dev/null
+while IFS= read -r relative || [ -n "$relative" ]; do
+    case "$relative" in ''|/*|*'..'*|*$'\r'*) printf '发布清单路径无效\n' >&2; exit 1 ;; esac
     source_path="$PROJECT_ROOT/$relative"
     [ -f "$source_path" ] || { printf '发布文件缺失：%s\n' "$source_path" >&2; exit 1; }
     target_path="$STAGE_ROOT/$relative"
     mkdir -p -- "$(dirname "$target_path")"
     cp -p -- "$source_path" "$target_path"
-done
-IFS="$old_ifs"
+done < "$PROJECT_ROOT/resources/macos-package-files.txt"
 
 chmod +x "$STAGE_ROOT"/*.command "$STAGE_ROOT/scripts/install_macos.sh"
 find "$STAGE_ROOT" -exec touch -t 202001010000 {} +

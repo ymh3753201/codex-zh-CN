@@ -1,10 +1,10 @@
-# macOS 零基础安装教程（0.2.0-preview.1）
+# macOS 零基础安装教程（0.2.0-preview.2）
 
 这个非官方工具使用 Codex 自带的中文词条，保留官方程序、对话和其他配置。不需要 Node.js、Python 或 Homebrew，不关闭系统安全保护。
 
 ## 三步使用
 
-1. 完整解压 codex-zh-CN-macOS-v0.2.0-preview.1.zip，双击「macOS-一键安装.command」。不要只拖出一个文件。
+1. 完整解压 codex-zh-CN-macOS-v0.2.0-preview.2.zip，双击「macOS-一键安装.command」。不要只拖出一个文件。此包必须有五个 macOS `.command` 入口；旧 Windows v0.3.4 包没有这些入口，不能在 Mac 上安装。
 2. 工具先使用官方中文设置，不创建副本，默认不重启。保存正在运行的任务，手动退出 Codex，再双击「macOS-打开中文版.command」。
 3. 亲眼检查菜单和主界面。两处都中文就完成，不必再安装。若仍英文，才双击「macOS-兼容汉化.command」，准备独立副本，再保存任务、退出并用「打开中文版」验收。使用副本时，原来的官方图标仍打开官方版本。
 
@@ -53,6 +53,8 @@ macOS 如果拒绝启动，请保留报告交给助教；不要删除隔离属�
 不修改程序的官方设置模式：在安装命令加 --mode native。明确选择兼容副本：--mode copy。恢复英文：--action restore --no-restart。--restart 会退出相应目标；恢复时先退出受管副本，再重启官方 Codex，仅在保存所有任务并明确同意后使用。
 
 ## 报告怎么看
+
+安装器先检查工具包文件与版本。文件缺失或混用版本时，在修改用户配置前停止，失败阶段为 `tool-package-check`，问题报告保存在显示出的临时目录。`toolPackageReady` 只表示下载文件齐全，不等于中文资源、安装或界面已通过。
 
 报告默认位于 ~/.codex/zh-cn-tool/macos/diagnostics/，对应日志在 logs/，配置备份在 backups/，副本在 copies/。使用自定义 CODEX_HOME 时跟随该目录。
 

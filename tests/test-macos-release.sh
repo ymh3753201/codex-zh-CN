@@ -31,26 +31,11 @@ RECORDED_HASH="$(grep -E '^[0-9a-f]{64}  codex-zh-CN-macOS-v' "$PROJECT_ROOT/doc
 
 /usr/bin/ditto -x -k "$ZIP_PATH" "$EXTRACT_DIR"
 PACKAGE_ROOT="$EXTRACT_DIR/$BASE"
-for relative in \
-    'macOS-一键安装.command' \
-    'macOS-兼容汉化.command' \
-    'macOS-检查状态.command' \
-    'macOS-打开中文版.command' \
-    'macOS-恢复英文.command' \
-    'scripts/install_macos.sh' \
-    'scripts/inspect-macos-asar.js' \
-    'scripts/macos-copy.sh' \
-    'scripts/check-macos-copy-paths.js' \
-    'scripts/macos-integrity.js' \
-    'scripts/macos-local.entitlements.plist' \
-    'resources/macos-release.json' \
-    'docs/macOS零基础安装教程.md' \
-    'docs/macOS语言开关反馈审查-2026-10-04.md' \
-    'docs/macOS兼容副本实测-2026-10-06.md' \
-    'LICENSE'; do
+while IFS= read -r relative || [ -n "$relative" ]; do
     [ -f "$PACKAGE_ROOT/$relative" ] || fail "工具包缺少 $relative"
     [ "$(shasum -a 256 "$PACKAGE_ROOT/$relative" | awk '{print $1}')" = "$(shasum -a 256 "$PROJECT_ROOT/$relative" | awk '{print $1}')" ] || fail "工具包与源码不一致：$relative"
-done
+done < "$PROJECT_ROOT/resources/macos-package-files.txt"
+/bin/bash "$PACKAGE_ROOT/scripts/check-macos-package.sh" >/dev/null || fail "解压的工具包检查未通过"
 
 [ -x "$PACKAGE_ROOT/macOS-一键安装.command" ] || fail "双击入口没有执行权限"
 [ -x "$PACKAGE_ROOT/scripts/install_macos.sh" ] || fail "安装脚本没有执行权限"
