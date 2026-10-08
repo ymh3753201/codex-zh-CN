@@ -5,14 +5,18 @@
 ```text
 请你直接在我的电脑上完成 Codex Desktop 汉化，不要只给我教程或命令，请使用本机终端实际执行。
 
-工具官方仓库：https://github.com/ymh3753201/codex-zh-CN
-请固定下载这个源码快照：806d919cffc20d162da3c858396ae2f23c7cedef
+非官方汉化工具仓库：https://github.com/ymh3753201/codex-zh-CN
+只下载这个完整工具 ZIP：https://codeload.github.com/ymh3753201/codex-zh-CN/zip/03057f757d9722ff0228d4b73493bf0723110912
+固定提交：03057f757d9722ff0228d4b73493bf0723110912
+该 ZIP 的 SHA-256：71492691fcba778fdcd2d28ad474ccbe3dbbe81fcedd2252c38a4dfa2ca90c78
+其中 Windows 工具版本为 0.3.5，macOS 工具版本为 0.2.0-preview.2。
 
 请完成以下任务：
 
-1. 自动识别我使用的是 Windows 还是 macOS，从上述官方仓库下载完整工具到新的独立目录，记录下载文件的 SHA-256，并检查文件是否齐全。不要让我另外安装 Git、Node.js、Python、Homebrew 或 PowerShell 7。
+1. 自动识别 Windows 或 macOS，从上面的固定 ZIP 地址下载到新的独立目录，核对 SHA-256、完整解压并检查入口。不要改用 main、latest 或旧版 v0.3.4；旧包没有 macOS 入口。哈希不符或入口缺失时，先报告“工具下载版本或完整性检查失败”，只允许重新下载一次；仍失败就停止，不修改配置，不用手动设置中文冒充工具安装。不要让我另外安装 Git、Node.js、Python、Homebrew 或 PowerShell 7。若使用助教网盘包，请核对它对应的校验值，不能套用另一个 ZIP 的哈希。
 
 2. 使用与系统对应的工具自带入口安装，默认不关闭或重启当前 Codex：
+   - macOS 先做工具包预检：`/bin/bash "<工具目录>/scripts/check-macos-package.sh"`。预检通过才安装；工具未安装时应如实报告，不能仅凭中文配置声称完成。
    - Windows：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File "<工具目录>\scripts\install_windows.ps1" -NoRestart`
    - Windows 状态检查：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File "<工具目录>\scripts\install_windows.ps1" -Action status -Json`
    - macOS：`/bin/bash "<工具目录>/scripts/install_macos.sh" --action install --no-restart`
@@ -23,6 +27,7 @@
 macOS 首次默认只用官方设置，已正常中文就不创建副本。我确认重启后菜单或主界面仍英文时，请先用 `--action status --ui-result english --json` 记录，再重新执行安装命令，允许工具在独立副本中处理已识别的翻译开关；官方 App 不得改动。本地签名不等于官方签名或 Apple 公证，系统拒绝启动时不要绕过安全保护。报告 `lastResult=partial` 表示仍待界面确认，不要反复安装，也不能认定“工具正常、只怪上游”。
 
 4. 安装完成后，请分别检查并报告：
+   - 工具包完整且平台正确（macOS 看 `toolPackageReady`，Windows 检查入口和版本）
    - 中文资源齐备（`resourcesReady`）
    - 安装准备完成（Windows 看 `localizationReady`；macOS 分开看 `settingsPrepared` 和 `installationReady`）
    - 程序是否已启动
@@ -38,7 +43,9 @@ macOS 中，兼容副本仍英文时，请运行 `--action status --ui-result en
 - 系统和芯片：
 - Codex 版本：
 - 工具提交：
-- 中文资源齐备：是 / 否
+- 下载文件 SHA-256：
+- 工具包与平台匹配：是 / 否
+- 中文资源齐备：是 / 否 / 未检查
 - 安装准备完成：是 / 否
 - 程序启动：是 / 否 / 未尝试
 - 界面中文已确认：是 / 否 / 待我确认
@@ -48,6 +55,7 @@ macOS 中，兼容副本仍英文时，请运行 `--action status --ui-result en
 【助教反馈正文】
 - 是否疑似工具问题：是 / 否 / 无法判断
 - 失败阶段：
+- 下载来源与版本：
 - 关键错误：
 - 已做的排障：
 - 诊断报告位置：

@@ -173,6 +173,9 @@ jobs:
       - name: 学员通用提示词完整性
         run: /bin/bash tests/test-student-prompt.sh
 
+      - name: 实际固定版本下载、SHA-256 和跨平台入口
+        run: python3 tests/test-download-contract.py
+
       - name: macOS 安装、升级、失败回滚和架构回归
         run: /bin/bash tests/test-macos.sh
 
