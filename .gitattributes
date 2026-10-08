@@ -10,3 +10,10 @@
 # macOS 双击入口和 Shell 脚本必须保持 LF 与可执行权限。
 *.sh text eol=lf
 *.command text eol=lf
+
+# 下载提示词维护固定的历史快照，不能随工具 ZIP 再次引导回旧版本。
+# 本地安装说明保留；这些仅用于维护下载入口，不属于安装依赖。
+docs/学员通用AI下载与汉化提示词.md export-ignore
+docs/下载版本与平台入口.md export-ignore
+resources/download-snapshot.json export-ignore
+tests/test-download-contract.py export-ignore
