@@ -27,7 +27,9 @@ globalThis.WebSocket = class {
       url: 'file:///codex/index.html',
       text: scenario === 'english' ? 'Welcome to Codex Desktop. Start a new task.' : '欢迎使用桌面程序，现在可以开始一个新的任务并查看设置和帮助。'
     } } } };
-    nativeTimeout(() => this.onmessage({ data: JSON.stringify(reply) }), 0);
+    // Deterministic async reply: a busy Windows runner can execute an already-due
+    // accelerated deadline before a 0ms timer. Do not weaken checker timeouts.
+    queueMicrotask(() => this.onmessage({ data: JSON.stringify(reply) }));
   }
   close() {}
 };

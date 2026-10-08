@@ -1,6 +1,27 @@
-# Codex Desktop 中文兼容工具 v0.3.5
+# Codex Desktop 中文兼容工具
 
-用于 Windows 10 / Windows 11 的非官方离线汉化工具，使用 Codex 自带的中文资源。
+面向零基础学员的非官方汉化工具，使用 Codex Desktop 自带的官方中文资源，保留官方程序、对话和其他配置。
+
+**下载前看版本：** 目前默认 `main@69a9f16 / v0.3.4` 仍是 Windows-only，首页的「Download ZIP」不能作为 macOS 下载入口。请使用[固定版本直接下载与校验网页](https://github.com/ymh3753201/codex-zh-CN/blob/codex/macos-support/docs/下载版本与平台入口.md)，或助教提供的完整「汉化工具」ZIP。已经完整解压的 macOS 用户先看包内[汉化工具说明](macOS-先看这里-汉化工具.md)。缺少 `scripts/install_macos.sh` 就是下载版本不对，不能算 macOS 安装完成。
+
+## macOS 预览支持
+
+macOS 工具版本为 `0.2.0-preview.2`。首次默认只用官方中文资源和语言设置；亲眼确认仍英文后，才选择「macOS-兼容汉化.command」，在用户目录生成独立中文副本，官方 `.app` 不改动。普通学员不需要 Node.js、Python 或 Homebrew。副本使用本地签名，不冒充官方签名或 Apple 公证，也不关闭系统安全保护。官方设置已正常中文时无需副本。
+
+解压 macOS 工具包后按顺序使用：
+
+1. `macOS-一键安装.command`：检查官方签名、Apple 公证、芯片架构和中文资源，备份后写入中文设置；默认不重启。
+2. 保存正在执行的任务并手动退出 Codex。
+3. `macOS-打开中文版.command`：重新校验后打开官方中文目标或准备好的兼容副本；副本成功启动后才激活。仍英文才使用 `macOS-兼容汉化.command`。
+4. 亲眼确认菜单和主界面中文。脚本成功或进程存在不等于界面已经验收。
+
+另有 `macOS-检查状态.command` 和 `macOS-恢复英文.command`。详细步骤见 [macOS 零基础安装教程](docs/macOS零基础安装教程.md)，当前测试证据与待验收范围见 [macOS 兼容副本实测](docs/macOS兼容副本实测-2026-10-06.md)，预览包校验值见 [macOS 工具包 SHA-256](docs/macOS工具包SHA256.md)。
+
+当前实测环境：Apple Silicon（arm64）、macOS `26.6.2`、Codex `26.930.51102`（构建 `13100`）。Intel/Universal 有模拟资源测试，但真实 Intel、其他 macOS/Codex 版本、账号登录和已有任务仍需分别验收。本预览版不代表全机型上线验收通过。
+
+## Windows v0.3.5
+
+Windows 10 / Windows 11 继续使用现有离线兼容副本方案。
 
 **v0.3.5 当前为待验收版本，尚未正式发布。** Windows 10 / Windows 11 的真实安装、界面中文和恢复验收尚未完成。
 
@@ -124,6 +145,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\install_windows.ps1 
 支持 `-CodexHome`、`CODEX_HOME`、`CODEX_DESKTOP_PATH`、`CODEX_ZH_CN_PATH`。复杂的内联或点分 desktop 配置会被明确拒绝，以免写入无效或重复设置。
 
 ## 开发验证
+
+macOS：
+
+```bash
+bash tests/test-macos.sh
+bash scripts/package-macos.sh
+bash tests/test-macos-release.sh
+```
+
+Windows：
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File tests\test-regressions.ps1

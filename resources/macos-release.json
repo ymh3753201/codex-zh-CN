@@ -1,0 +1,15 @@
+{
+  "release": "0.2.0-preview.2",
+  "strategy": "official-resources-isolated-local-copy",
+  "bundleIdentifier": "com.openai.codex",
+  "testedCodexVersion": "26.930.51102",
+  "testedBuildVersion": "13100",
+  "validation": {
+    "macOS": "26.6.2",
+    "appleSilicon": "Isolated real arm64 copy tested; official app and production data are not installation targets. See dated test record for visual acceptance",
+    "intel": "macOS 15 Intel CI added for tool regression; real Codex launch and visual acceptance pending",
+    "codex261002": "26.1002.52244 build 13536 arm64 official resources and translation gates inspected read-only; not Intel launch or UI acceptance",
+    "ui": "Local copy enables recognized translation loading independently of the remote gate; visual acceptance and login/task compatibility are separate gates",
+    "windows": "Existing Windows workflow remains separate and must continue to pass on GitHub Actions"
+  }
+}
