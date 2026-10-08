@@ -2,7 +2,7 @@
 
 面向零基础学员的非官方汉化工具，使用 Codex Desktop 自带的官方中文资源，保留官方程序、对话和其他配置。
 
-**下载前看版本：** 目前默认 `main@69a9f16 / v0.3.4` 仍是 Windows-only，首页的「Download ZIP」不能作为 macOS 下载入口。请使用[学员提示词中指定的固定源码快照](docs/学员通用AI下载与汉化提示词.md)，或助教提供的完整「汉化工具」ZIP。缺少 `scripts/install_macos.sh` 就是下载版本不对，不能算 macOS 安装完成。
+**下载前看版本：** 目前默认 `main@69a9f16 / v0.3.4` 仍是 Windows-only，首页的「Download ZIP」不能作为 macOS 下载入口。请使用[固定版本直接下载与校验网页](https://github.com/ymh3753201/codex-zh-CN/blob/codex/macos-support/docs/下载版本与平台入口.md)，或助教提供的完整「汉化工具」ZIP。已经完整解压的 macOS 用户先看包内[汉化工具说明](macOS-先看这里-汉化工具.md)。缺少 `scripts/install_macos.sh` 就是下载版本不对，不能算 macOS 安装完成。
 
 ## macOS 预览支持
 

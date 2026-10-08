@@ -7,12 +7,48 @@ set -u
 
 TOOL_VERSION="0.2.0-preview.2"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
-if [ ! -f "$SCRIPT_DIR/check-macos-package.sh" ]; then
-    printf '%s\n' '{"toolPackageReady":false,"toolIssueSuspected":true,"failureStage":"tool-package-check","lastResult":"failed","failureMessage":"缺少工具包检查入口，请重新下载完整 macOS 工具包","installationReady":false,"launchAttempted":false,"uiLanguageVerified":false}'
-    exit 1
+# Independent fallback: it must work even when the checker is missing or broken.
+fallback_package_report() {
+    local report_dir report_file report_log key
+    report_dir="$(/usr/bin/mktemp -d /tmp/codex-zh-tool-package.XXXXXX)" || {
+        printf '工具包预检入口缺失或无法执行，且无法保存问题报告，请把此错误交给助教。\n' >&2; return 1;
+    }
+    report_file="$report_dir/report.json"
+    report_log="$report_dir/log.txt"
+    printf 'tool-package-check: checker missing, damaged, or did not return a valid report\n' > "$report_log"
+    /usr/bin/plutil -create xml1 "$report_file" || return 1
+    for key in toolPackageReady resourcesReady settingsPrepared installationReady launchAttempted programRunning uiLanguageVerified; do
+        /usr/bin/plutil -insert "$key" -bool NO "$report_file" || return 1
+    done
+    /usr/bin/plutil -insert toolIssueSuspected -bool YES "$report_file" || return 1
+    /usr/bin/plutil -insert toolVersion -string "$TOOL_VERSION" "$report_file" || return 1
+    /usr/bin/plutil -insert lastResult -string failed "$report_file" || return 1
+    /usr/bin/plutil -insert failureStage -string tool-package-check "$report_file" || return 1
+    /usr/bin/plutil -insert failureMessage -string '工具包预检入口缺失、损坏或无法执行，请重新下载完整 macOS 工具包' "$report_file" || return 1
+    /usr/bin/plutil -insert problemClassification -string incomplete-or-wrong-tool-package "$report_file" || return 1
+    /usr/bin/plutil -insert nextAction -string download-pinned-complete-macos-tool "$report_file" || return 1
+    /usr/bin/plutil -insert reportPath -string "$report_file" "$report_file" || return 1
+    /usr/bin/plutil -insert logPath -string "$report_log" "$report_file" || return 1
+    /usr/bin/plutil -convert json "$report_file" || return 1
+    chmod 600 "$report_file" "$report_log"
+    printf '[错误] 工具包预检未完成，配置未修改。\n问题报告：%s\n' "$report_file" >&2
+    /bin/cat "$report_file"
+}
+PACKAGE_CHECK=""
+PACKAGE_CHECK_EXIT=1
+if [ -f "$SCRIPT_DIR/check-macos-package.sh" ]; then
+    PACKAGE_CHECK="$(/bin/bash "$SCRIPT_DIR/check-macos-package.sh" --root "$SCRIPT_DIR/.." --expected-version "$TOOL_VERSION")"
+    PACKAGE_CHECK_EXIT=$?
 fi
-if ! PACKAGE_CHECK="$(/bin/bash "$SCRIPT_DIR/check-macos-package.sh" --root "$SCRIPT_DIR/.." --expected-version "$TOOL_VERSION")"; then
-    printf '%s\n' "$PACKAGE_CHECK"
+PACKAGE_READY="$(printf '%s' "$PACKAGE_CHECK" | /usr/bin/plutil -extract toolPackageReady raw -o - - 2>/dev/null || true)"
+if [ "$PACKAGE_CHECK_EXIT" -ne 0 ] || [ "$PACKAGE_READY" != true ]; then
+    PACKAGE_REPORT="$(printf '%s' "$PACKAGE_CHECK" | /usr/bin/plutil -extract reportPath raw -o - - 2>/dev/null || true)"
+    case "$PACKAGE_REPORT" in
+        /tmp/codex-zh-tool-package.*/report.json)
+            if [ "$PACKAGE_READY" = false ] && [ -f "$PACKAGE_REPORT" ]; then printf '%s\n' "$PACKAGE_CHECK";
+            else fallback_package_report; fi ;;
+        *) fallback_package_report ;;
+    esac
     exit 1
 fi
 # shellcheck source=macos-copy.sh

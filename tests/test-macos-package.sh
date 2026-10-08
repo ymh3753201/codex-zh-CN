@@ -60,6 +60,32 @@ assert "$(shasum -a 256 "$DATA/config.toml" | awk '{print $1}')" "$CONFIG_HASH" 
 ! grep -q keep-private-test-sentinel "$CASE/result.json" || fail "报告泄露配置内容"
 mv "$PACKAGE/scripts/macos-copy.sh.saved" "$PACKAGE/scripts/macos-copy.sh"
 
+# The reporter must not depend on the very checker that is missing or broken.
+cp "$PACKAGE/scripts/check-macos-package.sh" "$CASE/checker.saved"
+for mode in missing syntax failure invalid-success; do
+    case "$mode" in
+        missing) rm "$PACKAGE/scripts/check-macos-package.sh" ;;
+        syntax) printf 'if then\n' > "$PACKAGE/scripts/check-macos-package.sh" ;;
+        failure) printf 'exit 17\n' > "$PACKAGE/scripts/check-macos-package.sh" ;;
+        invalid-success) printf 'printf invalid-json\n' > "$PACKAGE/scripts/check-macos-package.sh" ;;
+    esac
+    if /bin/bash "$PACKAGE/scripts/install_macos.sh" --action status --json --codex-home "$DATA" \
+        > "$CASE/result.json" 2> "$CASE/error.log"; then fail "损坏预检入口仍进入状态检查"; fi
+    assert "$(value "$CASE/result.json" failureStage)" tool-package-check "预检入口故障没有明确阶段"
+    for field in toolPackageReady resourcesReady settingsPrepared installationReady launchAttempted programRunning uiLanguageVerified; do
+        assert "$(value "$CASE/result.json" "$field")" false "故障预检结果不真实：$field"
+    done
+    REPORTS+=("$(value "$CASE/result.json" reportPath)")
+    [ -f "$(value "$CASE/result.json" reportPath)" ] || fail "入口故障没有持久报告"
+    LOG="$(value "$CASE/result.json" logPath)"
+    [ -s "$LOG" ] || fail "入口故障没有关键日志"
+    assert "$(stat -f '%Lp' "$LOG")" 600 "入口故障日志权限不正确"
+    rm "$LOG"
+    assert "$(shasum -a 256 "$DATA/config.toml" | awk '{print $1}')" "$CONFIG_HASH" "预检入口故障改变配置"
+    [ ! -e "$DATA/zh-cn-tool" ] || fail "预检入口故障创建了用户状态目录"
+    cp "$CASE/checker.saved" "$PACKAGE/scripts/check-macos-package.sh"
+done
+
 /usr/bin/plutil -replace release -string 0.1.0-preview.2 "$PACKAGE/resources/macos-release.json"
 failed_check "$PACKAGE"
 cp "$ROOT/resources/macos-release.json" "$PACKAGE/resources/macos-release.json"
