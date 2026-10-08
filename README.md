@@ -2,6 +2,20 @@
 
 用于 Windows 10 / Windows 11 的非官方离线汉化工具，使用 Codex 自带的中文资源。
 
+## macOS 用户请先看这里
+
+本页的 v0.3.4 和这个版本的「Code → Download ZIP」**没有 macOS 安装入口**，不要下载后运行 Windows 脚本，也不要把手动设置中文当成工具安装成功。
+
+需要 macOS 汉化工具时，请下载[Windows / macOS 完整工具预览 ZIP](https://codeload.github.com/ymh3753201/codex-zh-CN/zip/03057f757d9722ff0228d4b73493bf0723110912)，固定提交 `03057f757d9722ff0228d4b73493bf0723110912`，包含 Windows v0.3.5 / macOS v0.2.0-preview.2。这个源码 ZIP 的 SHA-256：
+
+```text
+71492691fcba778fdcd2d28ad474ccbe3dbbe81fcedd2252c38a4dfa2ca90c78
+```
+
+完整解压到新目录，先看包内「macOS-先看这里-汉化工具.md」，再双击「macOS-一键安装.command」；默认不退出正在运行的 Codex。让本机 AI 安装时使用[学员通用提示词](https://github.com/ymh3753201/codex-zh-CN/blob/codex/macos-support/docs/学员通用AI下载与汉化提示词.md)。下载失败就向助教索取完整网盘包及它对应的校验值，不要退回旧包或混用不同 ZIP 的哈希。
+
+**macOS 仍为开发预览，不是正式发布。** 自动回归在 Apple Silicon 和 Intel 环境运行，但学员实际 Codex 的登录、已有任务、启动和中文界面仍须本人验收。脚本成功或进程存在不代表界面中文。开发与验收进度见[草稿 PR #4](https://github.com/ymh3753201/codex-zh-CN/pull/4)。下面原有说明只适用于 Windows v0.3.4。
+
 v0.3.4 改善启动失败提示、自定义安装路径识别和中文副本状态检查。完整解压新版到新文件夹后运行，不要只替换 BAT 文件。
 
 双击“一键安装”完全没反应时，尝试同目录的 `install-fallback.vbs`。它绕过 BAT 入口直接启动安装器；如果系统禁用了脚本，这个入口也可能无法执行。
